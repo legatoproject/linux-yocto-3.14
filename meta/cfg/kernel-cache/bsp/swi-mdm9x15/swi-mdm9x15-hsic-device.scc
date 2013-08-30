@@ -1,0 +1,4 @@
+define KFEATURE_DESCRIPTION "Enable HSIC device mode"
+define KFEATURE_COMPATIBILITY optional
+
+kconf hardware swi-mdm9x15-hsic-device.cfg

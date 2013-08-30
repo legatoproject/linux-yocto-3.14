@@ -1,0 +1,8 @@
+define KMACHINE swi-mdm9x15
+define KTYPE standard
+define KARCH arm
+
+include ktypes/standard
+branch swi-mdm9x15
+
+include swi-mdm9x15.scc
