@@ -2718,6 +2718,13 @@ config SIERRA_GPIO_WAKEN
 	  Support for GPIO WAKE functionality. This pin is monitored
 	  by Modem Power Manager (MPM). If unsure, say Y here.
 
+config SIERRA_AIRLINK_COLUMBIA
+	depends on SIERRA_PLATFORM_FEATURES
+	bool "Enable Sierra Wireless AirLink Columbia-X features"
+	default n
+	help
+	  Support for AirLink Columbia-X features.
+
 #SWISTOP
 
 config MSM_CACHE_DUMP_ON_PANIC
