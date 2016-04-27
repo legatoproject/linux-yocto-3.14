@@ -2331,6 +2331,16 @@ static inline struct inode *file_inode(struct file *f)
 	return f->f_inode;
 }
 
+static inline struct dentry *file_dentry(struct file *file)
+{
+	struct dentry *dentry = file->f_path.dentry;
+
+	if (unlikely(dentry->d_flags & DCACHE_OP_REAL))
+		return dentry->d_op->d_real(dentry, file_inode(file));
+	else
+		return dentry;
+}
+
 static inline void file_start_write(struct file *file)
 {
 	if (!S_ISREG(file_inode(file)->i_mode))

@@ -160,6 +160,7 @@ struct dentry_operations {
 	char *(*d_dname)(struct dentry *, char *, int);
 	struct vfsmount *(*d_automount)(struct path *);
 	int (*d_manage)(struct dentry *, bool);
+	struct dentry *(*d_real)(struct dentry *, struct inode *);
 } ____cacheline_aligned;
 
 /*
@@ -220,7 +221,7 @@ struct dentry_operations {
 #define DCACHE_AUTODIR_TYPE		0x00200000 /* Lookupless directory (presumed automount) */
 #define DCACHE_SYMLINK_TYPE		0x00300000 /* Symlink */
 #define DCACHE_FILE_TYPE		0x00400000 /* Other file type */
-
+#define DCACHE_OP_REAL			0x08000000
 extern seqlock_t rename_lock;
 
 static inline int dname_external(const struct dentry *dentry)
@@ -525,6 +526,14 @@ static inline struct inode *d_backing_inode(const struct dentry *upper)
 static inline struct dentry *d_backing_dentry(struct dentry *upper)
 {
 	return upper;
+}
+
+static inline struct dentry *d_real(struct dentry *dentry)
+{
+	if (unlikely(dentry->d_flags & DCACHE_OP_REAL))
+		return dentry->d_op->d_real(dentry, NULL);
+	else
+		return dentry;
 }
 
 #endif	/* __LINUX_DCACHE_H */
