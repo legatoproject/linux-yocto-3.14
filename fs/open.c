@@ -831,7 +831,7 @@ struct file *dentry_open(const struct path *path, int flags,
 				fput(f);
 				f = ERR_PTR(error);
 			}
-		} else { 
+		} else {
 			put_filp(f);
 			f = ERR_PTR(error);
 		}
@@ -849,14 +849,12 @@ EXPORT_SYMBOL(dentry_open);
 int vfs_open(const struct path *path, struct file *filp,
 	     const struct cred *cred)
 {
-	struct inode *inode = path->dentry->d_inode;
-
-	if (inode->i_op->dentry_open)
-		return inode->i_op->dentry_open(path->dentry, filp, cred);
-	else {
-		filp->f_path = *path;
-		return do_dentry_open(filp, NULL, cred);
-	}
+	struct inode *inode = vfs_select_inode(path->dentry, filp->f_flags);
+	if (IS_ERR(inode))
+		return PTR_ERR(inode);
+ 
+	filp->f_path = *path;
+	return do_dentry_open(filp, NULL, cred);
 }
 EXPORT_SYMBOL(vfs_open);
 
