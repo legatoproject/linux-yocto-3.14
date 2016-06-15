@@ -237,8 +237,13 @@ static int nmea_open(struct inode *ip, struct file *fp)
 	int r = 0;
 
 	mutex_lock(&nmea_ch_lock);
-	if (nmea_devp->ch == 0)
+	if (nmea_devp->ch == 0){
 		r = smd_open("GPSNMEA", &nmea_devp->ch, nmea_devp, nmea_notify);
+		if((!r) && (nmea_devp->ch)){
+			/* NMEA is on opening state, reset the ch->send tail as 0 */
+			r = smd_reset_send_tail(nmea_devp->ch);
+		}
+	}
 	mutex_unlock(&nmea_ch_lock);
 
 	return r;

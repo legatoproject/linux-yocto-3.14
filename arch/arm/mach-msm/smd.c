@@ -2270,7 +2270,19 @@ int smd_is_pkt_avail(smd_channel_t *ch)
 }
 EXPORT_SYMBOL(smd_is_pkt_avail);
 
+/* This API will only be called in nmea_open to reset its send tail value */
+int smd_reset_send_tail(smd_channel_t *ch)
+{
+	if (!ch){
+		pr_err("%s: Invalid channel specified\n", __func__);
+		return -EINVAL;
+	}
 
+	ch->half_ch->set_tail(ch->send,0);
+
+	return 0;
+}
+EXPORT_SYMBOL(smd_reset_send_tail);
 /* -------------------------------------------------------------------------- */
 
 /*

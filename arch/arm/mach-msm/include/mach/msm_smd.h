@@ -182,6 +182,9 @@ int smd_write_user_buffer(smd_channel_t *ch, const void *data, int len);
 int smd_write_avail(smd_channel_t *ch);
 int smd_read_avail(smd_channel_t *ch);
 
+/* This API will only be called in nmea_open to reset its send tail value */
+int smd_reset_send_tail(smd_channel_t *ch);
+
 /* Returns the total size of the current packet being read.
 ** Returns 0 if no packets available or a stream channel.
 */
