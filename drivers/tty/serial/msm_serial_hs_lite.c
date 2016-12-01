@@ -53,6 +53,10 @@
 #include <asm/mach-types.h>
 #include "msm_serial_hs_hwreg.h"
 
+#ifdef CONFIG_SIERRA_MSM_HSL_RS485
+#include <../arch/arm/mach-msm/board-9615.h>
+#endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
+
 #if (defined(CONFIG_SIERRA_GSBI4_UART) || \
      defined(CONFIG_SIERRA_GSBI5_UART) || \
      defined(CONFIG_SIERRA_GSBI5_I2C_UART))
@@ -79,6 +83,21 @@ enum uart_func_mode {
 	UART_FOUR_WIRE,/* can support HW Flow control. */
 };
 
+#ifdef CONFIG_SIERRA_MSM_HSL_RS485
+enum serial_rs_mode {
+	SERIAL_RS232, /* Default serial communication mode*/
+	SERIAL_RS485_NO_LOOPBACK, /* RS485 support*/
+	SERIAL_RS485_LOOPBACK, /* RS485 support*/
+};
+#endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
+
+#ifdef CONFIG_SERIAL_MSM_HSL_CONSOLE
+static void msm_hsl_console_putchar(struct uart_port *port, int ch);
+static void msm_hsl_console_write(struct console *co, const char *s, unsigned int count);
+#endif /* CONFIG_SERIAL_MSM_HSL_CONSOLE */
+
+static void dump_hsl_regs(struct uart_port *port);
+
 struct msm_hsl_port {
 	struct uart_port	uart;
 	char			name[16];
@@ -102,6 +121,20 @@ struct msm_hsl_port {
 	struct msm_bus_scale_pdata *bus_scale_table;
 	unsigned int		tx_fifothreshold;/* tx fifo threshold */
 	unsigned int		rx_fifothreshold;/* rx fifo threshold */
+#ifdef CONFIG_SIERRA_MSM_HSL_RS485
+	/* Note:                                               */
+	/* With "tty_strcut.ldisc_sem" being down_write        */
+	/* and "uart_port.lock" being held                     */
+	/* Change of "serial_rs_mode" is safe for "non-console"*/
+	/* uart_port and "console" uart_port                   */
+	enum serial_rs_mode uart_rs_mode;
+	/*0 -- Low when RS485 is ON, 1 -- High when RS485 is ON */
+	unsigned int rs485_term_ctrl;
+	/*In unit of us. Deal with GPIO rising/falling            */
+	/*edge delay introduced from RS485 HW modification on DV2 */
+	unsigned int rs485_tx_ctrl_udelay;
+	unsigned int rs485_rx_ctrl_udelay;
+#endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
 };
 
 #define UARTDM_VERSION_11_13	0
@@ -181,6 +214,63 @@ static inline unsigned int msm_hsl_read(struct uart_port *port,
 {
 	return ioread32(port->membase + off);
 }
+
+static void msm_hsl_reset(struct uart_port *port)
+{
+	unsigned int vid = UART_TO_MSM(port)->ver_id;
+
+	/* reset everything */
+	msm_hsl_write(port, RESET_RX, regmap[vid][UARTDM_CR]);
+	msm_hsl_write(port, RESET_TX, regmap[vid][UARTDM_CR]);
+	msm_hsl_write(port, RESET_ERROR_STATUS, regmap[vid][UARTDM_CR]);
+	msm_hsl_write(port, RESET_BREAK_INT, regmap[vid][UARTDM_CR]);
+	msm_hsl_write(port, RESET_CTS, regmap[vid][UARTDM_CR]);
+	msm_hsl_write(port, RFR_LOW, regmap[vid][UARTDM_CR]);
+}
+
+#ifdef CONFIG_SIERRA_MSM_HSL_RS485
+static void wait_for_xmit_empty(struct uart_port *port)
+{
+	struct msm_hsl_port *msm_hsl_port = UART_TO_MSM(port);
+	unsigned int vid = msm_hsl_port->ver_id;
+	int count = 0;
+
+	while (!(msm_hsl_read(port, regmap[vid][UARTDM_SR]) & UARTDM_SR_TXEMT_BMSK))
+	{
+		udelay(1);
+		touch_nmi_watchdog();
+		cpu_relax();
+		if (++count == msm_hsl_port->tx_timeout) 
+		{
+			dump_hsl_regs(port);
+			panic("MSM HSL wait_for_xmitr is stuck!");
+		}
+	}
+	msm_hsl_write(port, CLEAR_TX_READY, regmap[vid][UARTDM_CR]);
+}
+
+static void msm_hsl_reset_txrx(struct uart_port *port)
+{
+	unsigned int data = 0x0;
+	unsigned int vid = UART_TO_MSM(port)->ver_id;
+	
+	msm_hsl_write(port, CR_PROTECTION_EN, regmap[vid][UARTDM_CR]);
+	msm_hsl_reset(port);
+
+	data = UARTDM_CR_TX_EN_BMSK;
+	data |= UARTDM_CR_RX_EN_BMSK;
+	/* enable TX & RX */
+	msm_hsl_write(port, data, regmap[vid][UARTDM_CR]);
+
+	msm_hsl_write(port, RESET_STALE_INT, regmap[vid][UARTDM_CR]);
+	/* turn on RX and CTS interrupts */
+	UART_TO_MSM(port)->imr = UARTDM_ISR_RXSTALE_BMSK | UARTDM_ISR_DELTA_CTS_BMSK | UARTDM_ISR_RXLEV_BMSK | UARTDM_ISR_RXBREAK_BMSK;
+	msm_hsl_write(port, UART_TO_MSM(port)->imr, regmap[vid][UARTDM_IMR]);
+	msm_hsl_write(port, 6500, regmap[vid][UARTDM_DMRX]);
+	msm_hsl_write(port, STALE_EVENT_ENABLE, regmap[vid][UARTDM_CR]);
+	dsb();
+}
+#endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
 
 static unsigned int msm_serial_hsl_has_gsbi(struct uart_port *port)
 {
@@ -501,28 +591,131 @@ static void msm_hsl_stop_tx(struct uart_port *port)
 {
 	struct msm_hsl_port *msm_hsl_port = UART_TO_MSM(port);
 
+#ifdef CONFIG_SIERRA_MSM_HSL_RS485
+	switch (msm_hsl_port->uart_rs_mode)
+	{
+		case SERIAL_RS232:
+			msm_hsl_port->imr &= ~UARTDM_ISR_TXLEV_BMSK;
+			msm_hsl_write(port, msm_hsl_port->imr, regmap[msm_hsl_port->ver_id][UARTDM_IMR]);
+			dsb();
+			break;
+		case SERIAL_RS485_NO_LOOPBACK:
+			msm_hsl_port->imr &= ~UARTDM_ISR_TXLEV_BMSK;
+			msm_hsl_write(port, msm_hsl_port->imr, regmap[msm_hsl_port->ver_id][UARTDM_IMR]);
+			dsb();
+			
+			wait_for_xmit_empty(port);
+			
+			gpio_set_value(MSM_GPIO_RS485_OUT_EN_N, 1);
+			if (msm_hsl_port->rs485_tx_ctrl_udelay)
+				udelay(msm_hsl_port->rs485_tx_ctrl_udelay);
+			if (!port->suspended)
+			{
+				gpio_set_value(MSM_GPIO_RS485_IN_EN, 1);
+				if (msm_hsl_port->rs485_rx_ctrl_udelay)
+					udelay(msm_hsl_port->rs485_rx_ctrl_udelay);
+			}
+
+			break;
+		case SERIAL_RS485_LOOPBACK:
+			msm_hsl_port->imr &= ~UARTDM_ISR_TXLEV_BMSK;
+			msm_hsl_write(port, msm_hsl_port->imr, regmap[msm_hsl_port->ver_id][UARTDM_IMR]);
+			dsb();
+			
+			wait_for_xmit_empty(port);
+			
+			gpio_set_value(MSM_GPIO_RS485_OUT_EN_N, 1);
+			if (msm_hsl_port->rs485_tx_ctrl_udelay)
+				udelay(msm_hsl_port->rs485_tx_ctrl_udelay);
+
+			break;
+		default:
+			BUG(); /* Something is wrong */
+	}
+#else
 	msm_hsl_port->imr &= ~UARTDM_ISR_TXLEV_BMSK;
 	msm_hsl_write(port, msm_hsl_port->imr,
 		regmap[msm_hsl_port->ver_id][UARTDM_IMR]);
+#endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
 }
 
 static void msm_hsl_start_tx(struct uart_port *port)
 {
 	struct msm_hsl_port *msm_hsl_port = UART_TO_MSM(port);
+#ifdef CONFIG_SIERRA_MSM_HSL_RS485
 
+	static unsigned int count = 0x0;
+
+	switch (msm_hsl_port->uart_rs_mode)
+	{
+		case SERIAL_RS232:
+			msm_hsl_port->imr |= UARTDM_ISR_TXLEV_BMSK;
+			msm_hsl_write(port, msm_hsl_port->imr, regmap[msm_hsl_port->ver_id][UARTDM_IMR]);
+			dsb();
+			break;
+		case SERIAL_RS485_NO_LOOPBACK:
+			gpio_set_value(MSM_GPIO_RS485_IN_EN, 0);
+			if (msm_hsl_port->rs485_rx_ctrl_udelay)
+				udelay(msm_hsl_port->rs485_rx_ctrl_udelay);
+			gpio_set_value(MSM_GPIO_RS485_OUT_EN_N, 0);
+			if (msm_hsl_port->rs485_tx_ctrl_udelay)
+				udelay(msm_hsl_port->rs485_tx_ctrl_udelay);
+
+			msm_hsl_port->imr |= UARTDM_ISR_TXLEV_BMSK;
+			msm_hsl_write(port, msm_hsl_port->imr, regmap[msm_hsl_port->ver_id][UARTDM_IMR]);
+			dsb();
+			break;
+		case SERIAL_RS485_LOOPBACK:
+			gpio_set_value(MSM_GPIO_RS485_OUT_EN_N, 0);
+			if (msm_hsl_port->rs485_tx_ctrl_udelay)
+				udelay(msm_hsl_port->rs485_tx_ctrl_udelay);
+
+			msm_hsl_port->imr |= UARTDM_ISR_TXLEV_BMSK;
+			msm_hsl_write(port, msm_hsl_port->imr, regmap[msm_hsl_port->ver_id][UARTDM_IMR]);
+			dsb();
+			break;
+		default:
+			BUG(); /* something is wrong seriously */
+	}
+#else
 	msm_hsl_port->imr |= UARTDM_ISR_TXLEV_BMSK;
 	msm_hsl_write(port, msm_hsl_port->imr,
 		regmap[msm_hsl_port->ver_id][UARTDM_IMR]);
+#endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
 }
 
 static void msm_hsl_stop_rx(struct uart_port *port)
 {
 	struct msm_hsl_port *msm_hsl_port = UART_TO_MSM(port);
 
+#ifdef CONFIG_SIERRA_MSM_HSL_RS485
+	switch (msm_hsl_port->uart_rs_mode)
+	{
+		case SERIAL_RS232:
+			msm_hsl_port->imr &= ~(UARTDM_ISR_RXLEV_BMSK |UARTDM_ISR_RXSTALE_BMSK);
+			msm_hsl_write(port, msm_hsl_port->imr, regmap[msm_hsl_port->ver_id][UARTDM_IMR]);
+			dsb();
+			break;
+		case SERIAL_RS485_NO_LOOPBACK:
+		case SERIAL_RS485_LOOPBACK:
+			gpio_set_value(MSM_GPIO_RS485_IN_EN, 0);
+			if (msm_hsl_port->rs485_rx_ctrl_udelay)
+				udelay(msm_hsl_port->rs485_rx_ctrl_udelay);
+			
+			/*Local irq is disabled on this path, don't bother with un-necessary spin_lock_irqsave/spin_unlock_irqrestore */
+			msm_hsl_port->imr &= ~(UARTDM_ISR_RXLEV_BMSK |UARTDM_ISR_RXSTALE_BMSK);
+			msm_hsl_write(port, msm_hsl_port->imr, regmap[msm_hsl_port->ver_id][UARTDM_IMR]);
+			dsb();
+			break;
+		default:
+			BUG(); //bad thing happended
+	}
+#else
 	msm_hsl_port->imr &= ~(UARTDM_ISR_RXLEV_BMSK |
 			       UARTDM_ISR_RXSTALE_BMSK);
 	msm_hsl_write(port, msm_hsl_port->imr,
 		regmap[msm_hsl_port->ver_id][UARTDM_IMR]);
+#endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
 }
 
 static void msm_hsl_enable_ms(struct uart_port *port)
@@ -663,7 +856,7 @@ static void handle_tx(struct uart_port *port)
 			break;
 		}
 		}
-		msm_hsl_write(port, x, regmap[vid][UARTDM_TF]);
+		msm_hsl_write(port, x, regmap[vid][UARTDM_TF]);		
 		xmit->tail = ((tx_count - tf_pointer < 4) ?
 			      (tx_count - tf_pointer + xmit->tail) :
 			      (xmit->tail + 4)) & (UART_XMIT_SIZE - 1);
@@ -676,7 +869,6 @@ static void handle_tx(struct uart_port *port)
 
 	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
 		uart_write_wakeup(port);
-
 }
 
 static void handle_delta_cts(struct uart_port *port)
@@ -748,19 +940,6 @@ static unsigned int msm_hsl_tx_empty(struct uart_port *port)
 	ret = (msm_hsl_read(port, regmap[vid][UARTDM_SR]) &
 	       UARTDM_SR_TXEMT_BMSK) ? TIOCSER_TEMT : 0;
 	return ret;
-}
-
-static void msm_hsl_reset(struct uart_port *port)
-{
-	unsigned int vid = UART_TO_MSM(port)->ver_id;
-
-	/* reset everything */
-	msm_hsl_write(port, RESET_RX, regmap[vid][UARTDM_CR]);
-	msm_hsl_write(port, RESET_TX, regmap[vid][UARTDM_CR]);
-	msm_hsl_write(port, RESET_ERROR_STATUS, regmap[vid][UARTDM_CR]);
-	msm_hsl_write(port, RESET_BREAK_INT, regmap[vid][UARTDM_CR]);
-	msm_hsl_write(port, RESET_CTS, regmap[vid][UARTDM_CR]);
-	msm_hsl_write(port, RFR_LOW, regmap[vid][UARTDM_CR]);
 }
 
 static unsigned int msm_hsl_get_mctrl(struct uart_port *port)
@@ -1146,6 +1325,20 @@ static int msm_hsl_startup(struct uart_port *port)
 	data |= UARTDM_MR1_AUTO_RFR_LEVEL1_BMSK & (rfr_level << 2);
 	data |= UARTDM_MR1_AUTO_RFR_LEVEL0_BMSK & rfr_level;
 	msm_hsl_write(port, data, regmap[vid][UARTDM_MR1]);
+#ifdef CONFIG_SIERRA_MSM_HSL_RS485
+	/* It's safe to enable RS485_IN in the path with "tty_port.mutex" being locked */
+	if (msm_hsl_port->uart_rs_mode != SERIAL_RS232)
+	{
+		gpio_set_value(MSM_GPIO_RS485_OUT_EN_N, 1);
+		if (msm_hsl_port->rs485_tx_ctrl_udelay)
+			udelay(msm_hsl_port->rs485_tx_ctrl_udelay);
+
+		gpio_set_value(MSM_GPIO_RS485_IN_EN, 1);
+		if (msm_hsl_port->rs485_rx_ctrl_udelay)
+			udelay(msm_hsl_port->rs485_rx_ctrl_udelay);
+
+	}
+#endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
 	spin_unlock_irqrestore(&port->lock, flags);
 
 	ret = request_irq(port->irq, msm_hsl_irq, IRQF_TRIGGER_HIGH,
@@ -1175,6 +1368,17 @@ static void msm_hsl_shutdown(struct uart_port *port)
 	msm_hsl_port->imr = 0;
 	/* disable interrupts */
 	msm_hsl_write(port, 0, regmap[msm_hsl_port->ver_id][UARTDM_IMR]);
+	
+#ifdef CONFIG_SIERRA_MSM_HSL_RS485
+	/* With "tty_port.mutex" being held, it's safe to toggle RS485 IN/OUT control pins here */
+	if (msm_hsl_port->uart_rs_mode != SERIAL_RS232)
+	{
+		gpio_set_value(MSM_GPIO_RS485_IN_EN, 0);
+		gpio_set_value(MSM_GPIO_RS485_OUT_EN_N, 1);
+		if (msm_hsl_port->rs485_tx_ctrl_udelay)
+			udelay(msm_hsl_port->rs485_tx_ctrl_udelay);
+	}
+#endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
 
 	free_irq(port->irq, port);
 
@@ -1587,7 +1791,53 @@ static void msm_hsl_console_write(struct console *co, const char *s,
 		spin_lock(&port->lock);
 	}
 	msm_hsl_write(port, 0, regmap[vid][UARTDM_IMR]);
+	
+#ifdef CONFIG_SIERRA_MSM_HSL_RS485
+	/* Local IRQ is disabled here, we are safe to toggle RS485 IN/OUT control pins */
+	/* This is console write path, it's not necessary to cleanup RXFIFO */
+	switch (msm_hsl_port->uart_rs_mode)
+	{
+	case SERIAL_RS485_NO_LOOPBACK:
+		gpio_set_value(MSM_GPIO_RS485_IN_EN, 0);
+		if (msm_hsl_port->rs485_rx_ctrl_udelay)
+			udelay(msm_hsl_port->rs485_rx_ctrl_udelay);
+
+		gpio_set_value(MSM_GPIO_RS485_OUT_EN_N, 0);
+		if (msm_hsl_port->rs485_tx_ctrl_udelay)
+			udelay(msm_hsl_port->rs485_tx_ctrl_udelay);
+		break;
+		
+	case SERIAL_RS485_LOOPBACK:
+		gpio_set_value(MSM_GPIO_RS485_OUT_EN_N, 0);
+		if (msm_hsl_port->rs485_tx_ctrl_udelay)
+			udelay(msm_hsl_port->rs485_tx_ctrl_udelay);
+
+		break;
+		
+	default:
+		break;
+	}
+	dsb();
+#endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
+
 	uart_console_write(port, s, count, msm_hsl_console_putchar);
+
+#ifdef CONFIG_SIERRA_MSM_HSL_RS485
+	/* Local IRQ is disabled here, we are safe to toggle RS485 IN/OUT control pins */
+	if (msm_hsl_port->uart_rs_mode != SERIAL_RS232)
+	{
+		wait_for_xmit_empty(port);
+		gpio_set_value(MSM_GPIO_RS485_OUT_EN_N, 1);
+		if (msm_hsl_port->rs485_tx_ctrl_udelay)
+			udelay(msm_hsl_port->rs485_tx_ctrl_udelay);
+
+		gpio_set_value(MSM_GPIO_RS485_IN_EN, 1);
+		if (msm_hsl_port->rs485_rx_ctrl_udelay)
+			udelay(msm_hsl_port->rs485_rx_ctrl_udelay);
+
+		dsb();
+	}
+#endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
 	msm_hsl_write(port, msm_hsl_port->imr, regmap[vid][UARTDM_IMR]);
 	if (locked == 1)
 		spin_unlock(&port->lock);
@@ -1604,6 +1854,7 @@ static int msm_hsl_console_setup(struct console *co, char *options)
 		return -ENXIO;
 
 	port = get_port_from_line(co->index);
+
 	vid = UART_TO_MSM(port)->ver_id;
 
 	if (unlikely(!port->membase))
@@ -1930,6 +2181,193 @@ static ssize_t show_uart_config(struct device *dev,
 
 static DEVICE_ATTR(config, 0444, show_uart_config, NULL);
 #endif /* CONFIG_SIERRA_GSBIn_UART */
+#ifdef CONFIG_SIERRA_MSM_HSL_RS485
+static ssize_t rs_mode_show(struct device *dev,
+                                struct device_attribute *attr, char *buf)
+{
+	struct uart_port *port = NULL;
+	struct msm_hsl_port *the_hsl_port = NULL;
+	struct uart_state *the_state = NULL;
+	struct platform_device *pdev = to_platform_device(dev);
+	unsigned int the_rs_mode;
+	unsigned long flags;
+
+	the_hsl_port = (struct msm_hsl_port *)(dev_get_drvdata(dev));
+	port = (struct uart_port *)the_hsl_port;
+	if (!the_hsl_port)
+	{
+		printk(KERN_ALERT "msm_hsl_port is not initialized correctly\n");
+		BUG();
+		return sprintf(buf, "\n");
+	}
+
+	the_state = port->state;
+
+	mutex_lock(&(the_state->port.mutex));
+	if (!the_state->port.tty)
+	{
+		mutex_unlock(&(the_state->port.mutex));
+		printk(KERN_ALERT "This TTY device has been shutdown, do nothing\n");
+		return sprintf(buf, "\n");
+	}
+	
+	ldsem_down_read(&(the_state->port.tty->ldisc_sem), MAX_SCHEDULE_TIMEOUT);
+
+	/* In the scenario of being console, we need to grab "uart_port.lock" before change "uart_rs_mode" */
+	spin_lock_irqsave(&port->lock, flags);
+
+	the_rs_mode = the_hsl_port->uart_rs_mode;
+
+	spin_unlock_irqrestore(&port->lock, flags);
+	
+	ldsem_up_read(&(the_state->port.tty->ldisc_sem));
+	mutex_unlock(&(the_state->port.mutex));
+
+	printk(KERN_ALERT "uart port(%d) serial mode(%d)\n", port->line, the_rs_mode);
+	
+	return sprintf(buf, "Done\n");
+}
+
+static ssize_t rs_mode_store(struct device *dev,
+                                struct device_attribute *attr,
+                                const char *buf, size_t count)
+{
+	unsigned int val;
+	struct uart_port *port = NULL;
+	struct msm_hsl_port *the_hsl_port = NULL;
+	struct uart_state *the_state = NULL;
+	struct platform_device *pdev = to_platform_device(dev);
+	enum serial_rs_mode new_rs_mode;
+	unsigned long flags;
+
+	the_hsl_port = (struct msm_hsl_port *)(dev_get_drvdata(dev));
+	port = (struct uart_port *)the_hsl_port;
+	if (!port)
+	{
+		printk(KERN_ALERT "msm_hsl_port is not initialized correctly\n");
+		BUG();
+		return count;
+	}
+		
+	val = simple_strtoul(buf, NULL, 0);
+#if (1)
+	/* Currently only support RS485 NO LOOPBACK mode */
+	if (val)
+		new_rs_mode = SERIAL_RS485_NO_LOOPBACK;
+	else
+		new_rs_mode = SERIAL_RS232;
+#else
+	/* This branch is to enable RS485_NO_LOOPBACK and RS485_LOOPBACK*/
+	/* For RS485_LOOPBACK mode, still need to understand the "echo"/"special char" related behaviours done by "tty_bufhead.work" in kernel worker thread */
+	/* Need more investigate on TTY configuration with regarding to echo/special chars xmit on the receiving path */
+
+	switch (val)
+	{
+		case SERIAL_RS232:
+			new_rs_mode = SERIAL_RS232;
+			break;
+		case SERIAL_RS485_NO_LOOPBACK:
+			new_rs_mode = SERIAL_RS485_NO_LOOPBACK;
+			break;
+		case SERIAL_RS485_LOOPBACK:
+			new_rs_mode = SERIAL_RS485_LOOPBACK;
+			break;
+		default:
+			printk(KERN_ALERT "input mode is invalid(%d), should be of <0, 1, 2>\n");
+			return count;
+	}
+#endif	
+	the_state = port->state;
+	mutex_lock(&(the_state->port.mutex));
+	if (!the_state->port.tty)
+	{
+		mutex_unlock(&(the_state->port.mutex));
+		printk(KERN_ALERT "This TTY device has been shutdown, do nothing\n");
+		return count;
+	}
+	
+	ldsem_down_write(&(the_state->port.tty->ldisc_sem), MAX_SCHEDULE_TIMEOUT);
+	
+	if (the_hsl_port->uart_rs_mode != new_rs_mode)
+	{
+		switch (new_rs_mode)
+		{
+		case SERIAL_RS485_NO_LOOPBACK:
+		case SERIAL_RS485_LOOPBACK:
+			spin_lock_irqsave(&port->lock, flags);
+			/*Disable UARTDM interrupt */
+			msm_hsl_write(port, 0, regmap[the_hsl_port->ver_id][UARTDM_IMR]);
+			dsb();
+			spin_unlock_irqrestore(&port->lock, flags);
+
+			/* Forceoff RS232 */
+			gpio_set_value_cansleep(MSM_GPIOEXP_FORCEOFF_RS232_N, 0);
+			/* Control RS485_TERM_N */
+			gpio_set_value_cansleep(MSM_GPIOEXP_RS485_TERM_N, (the_hsl_port->rs485_term_ctrl ? 0 : 0));
+			dsb();
+
+			spin_lock_irqsave(&port->lock, flags);
+			
+			gpio_set_value(MSM_GPIO_RS485_OUT_EN_N, 1);
+			if (the_hsl_port->rs485_tx_ctrl_udelay)
+				udelay(the_hsl_port->rs485_tx_ctrl_udelay);
+			gpio_set_value(MSM_GPIO_RS485_IN_EN, 1);
+			if (the_hsl_port->rs485_rx_ctrl_udelay)
+				udelay(the_hsl_port->rs485_rx_ctrl_udelay);
+			
+			/*Reset Transmitter and Receiver */
+			uart_circ_clear(&port->state->xmit);
+			tty_wakeup(port->state->port.tty);
+			msm_hsl_reset_txrx(port);
+			
+			the_hsl_port->uart_rs_mode = new_rs_mode;
+			dsb();
+			
+			spin_unlock_irqrestore(&port->lock, flags);
+
+			break;
+			
+		case SERIAL_RS232:
+			spin_lock_irqsave(&port->lock, flags);
+			/*Disable UARTDM interrupt */
+			msm_hsl_write(port, 0, regmap[the_hsl_port->ver_id][UARTDM_IMR]);
+			dsb();
+			
+			gpio_set_value(MSM_GPIO_RS485_OUT_EN_N, 1);
+			gpio_set_value(MSM_GPIO_RS485_IN_EN, 0);
+			if (the_hsl_port->rs485_rx_ctrl_udelay)
+				udelay(the_hsl_port->rs485_rx_ctrl_udelay);
+
+			spin_unlock_irqrestore(&port->lock, flags);
+
+			/* Turn on RS232 */
+			gpio_set_value_cansleep(MSM_GPIOEXP_FORCEOFF_RS232_N, 1);
+			dsb();
+			
+			spin_lock_irqsave(&port->lock, flags);
+			
+			/*Reset Transmitter and Receiver */
+			uart_circ_clear(&port->state->xmit);
+			tty_wakeup(port->state->port.tty);
+			msm_hsl_reset_txrx(port);
+
+			the_hsl_port->uart_rs_mode = SERIAL_RS232;
+			dsb();
+			
+			spin_unlock_irqrestore(&port->lock, flags);
+
+			break;
+		default:
+			BUG(); //Weird, should not run to here
+		}
+	}
+
+	ldsem_up_write(&(the_state->port.tty->ldisc_sem));
+	mutex_unlock(&(the_state->port.mutex));
+	return count;
+}
+static DEVICE_ATTR(rs_mode, S_IWUSR | S_IRUGO, rs_mode_show, rs_mode_store);
+#endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
 
 static struct uart_driver msm_hsl_uart_driver = {
 	.owner = THIS_MODULE,
@@ -2195,6 +2633,20 @@ static int msm_serial_hsl_probe(struct platform_device *pdev)
         if (unlikely(ret))
                 pr_err("Can't create fifo_rx attribute\n");
 
+#ifdef CONFIG_SIERRA_MSM_HSL_RS485
+	if (uart_func[line] != BSUARTFUNC_DISABLED)
+	{
+		msm_hsl_port->uart_rs_mode = SERIAL_RS232;
+		msm_hsl_port->rs485_term_ctrl = 0x0;
+		msm_hsl_port->rs485_tx_ctrl_udelay = 20; //Measured data on DV2 board
+		msm_hsl_port->rs485_rx_ctrl_udelay = 200; //Measured data on DV2 board
+
+		ret = device_create_file(&pdev->dev, &dev_attr_rs_mode);
+		if (unlikely(ret))
+			pr_err("Doesn't support Serial RS485 mode\n");
+	}
+#endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
+
 	msm_hsl_debugfs_init(msm_hsl_port, get_line(pdev));
 	mutex_init(&msm_hsl_port->clk_mutex);
 	if (pdata && pdata->use_pm)
@@ -2226,7 +2678,6 @@ static int msm_serial_hsl_probe(struct platform_device *pdev)
 	ret = uart_add_one_port(&msm_hsl_uart_driver, port);
 	if (msm_hsl_port->pclk)
 		clk_disable_unprepare(msm_hsl_port->pclk);
-
 err:
 	return ret;
 }
@@ -2373,6 +2824,20 @@ static void __exit msm_serial_hsl_exit(void)
 	platform_driver_unregister(&msm_hsl_platform_driver);
 	uart_unregister_driver(&msm_hsl_uart_driver);
 }
+
+#ifdef CONFIG_SIERRA_MSM_HSL_RS485
+static int __init msm_hsl_rs485_gpioexp_init(void)
+{
+	int ret = 0x0;
+	
+	ret = gpio_request_one(MSM_GPIOEXP_FORCEOFF_RS232_N, GPIOF_OUT_INIT_HIGH, "gpio_FORCEOFF_RS232_N");
+	ret = gpio_request_one(MSM_GPIOEXP_RS485_TERM_N, GPIOF_OUT_INIT_LOW, "gpio_RS485_TERM_N");
+
+	return ret;
+}
+
+late_initcall_sync(msm_hsl_rs485_gpioexp_init);
+#endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
 
 postcore_initcall(msm_serial_hsl_init);
 module_exit(msm_serial_hsl_exit);

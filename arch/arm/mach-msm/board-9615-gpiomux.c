@@ -526,6 +526,39 @@ static struct msm_gpiomux_config msm9615_slimbus_configs[] __initdata = {
 };
 #endif /* CONFIG_SIERRA_INTERNAL_CODEC */
 
+
+#ifdef CONFIG_SIERRA_MSM_HSL_RS485
+static struct gpiomux_setting msm9615_gpio_out_low = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_8MA,
+	.pull = GPIOMUX_PULL_NONE,
+	.dir = GPIOMUX_OUT_LOW,
+};
+static struct gpiomux_setting msm9615_gpio_out_high = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_8MA,
+	.pull = GPIOMUX_PULL_NONE,
+	.dir = GPIOMUX_OUT_HIGH,
+};
+
+static struct msm_gpiomux_config msm9615_rs485_in_out_configs[] __initdata = {
+	{
+		.gpio      = MSM_GPIO_RS485_OUT_EN_N,
+		.settings = {
+			[GPIOMUX_ACTIVE] = &msm9615_gpio_out_high,
+			[GPIOMUX_SUSPENDED] = &msm9615_gpio_out_high,
+		},
+	},
+	{
+		.gpio      = MSM_GPIO_RS485_IN_EN,
+		.settings = {
+			[GPIOMUX_ACTIVE] = &msm9615_gpio_out_low,
+			[GPIOMUX_SUSPENDED] = &msm9615_gpio_out_low,
+		},
+	},
+};
+#endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
+
 #ifdef CONFIG_FB_MSM_EBI2
 static struct msm_gpiomux_config msm9615_ebi2_lcdc_configs[] __initdata = {
 	{
@@ -559,7 +592,6 @@ static struct msm_gpiomux_config msm9615_wlan_configs[] __initdata = {
 	},
 };
 
-
 int __init msm9615_init_gpiomux(void)
 {
 	int rc;
@@ -577,6 +609,10 @@ int __init msm9615_init_gpiomux(void)
 	msm_gpiomux_install(msm9615_ulpm_configs,
 			ARRAY_SIZE(msm9615_ulpm_configs));
 #endif /* CONFIG_SIERRA_AIRLINK_COLUMBIA */
+
+#ifdef CONFIG_SIERRA_MSM_HSL_RS485
+	msm_gpiomux_install(msm9615_rs485_in_out_configs, ARRAY_SIZE(msm9615_rs485_in_out_configs));
+#endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
 
 #ifdef CONFIG_SIERRA_INTERNAL_CODEC
 	if(bssupport(BSFEATURE_WM8944) == false)

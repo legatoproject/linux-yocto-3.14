@@ -111,4 +111,11 @@ void mdm9615_init_fb(void);
 /* Setup for LowPower_RESET toggle. Returns 0 if everything is OK. */
 int gpio_cf3_low_power_reset_toggle(void);
 
+#ifdef CONFIG_SIERRA_MSM_HSL_RS485
+#define MSM_GPIO_RS485_OUT_EN_N       (26)
+#define MSM_GPIO_RS485_IN_EN          (27)
+#define MSM_GPIOEXP_FORCEOFF_RS232_N  (216)
+#define MSM_GPIOEXP_RS485_TERM_N      (220)
+#endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
+
 #endif
