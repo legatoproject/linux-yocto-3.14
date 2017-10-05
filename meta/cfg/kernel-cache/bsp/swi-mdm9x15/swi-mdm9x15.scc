@@ -6,3 +6,4 @@ include cfg/fs/ext3.scc
 include cfg/fs/ext4.scc
 include cfg/fs/vfat.scc
 #include cfg/fs/flash_fs.scc
+include features/tiwifi/tiwifi.scc
