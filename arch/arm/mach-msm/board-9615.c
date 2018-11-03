@@ -80,7 +80,8 @@
 #endif
 
 #ifdef CONFIG_WL_TI
-#define MSM_WIFI_IRQ_GPIO	80
+#define MSM_WIFI_IRQ_GPIO	80	/* IOT0_GPIO1 */
+#define MSM_WLAN_EN_GPIO	29	/* IOT0_GPIO4 */
 #endif
 
 #ifdef CONFIG_ION_MSM
@@ -1328,6 +1329,7 @@ static int __init msm9615_wl18xx_init(void)
 
 	memset(&msm_wl1251_pdata, 0, sizeof(msm_wl1251_pdata));
 
+	msm_wl1251_pdata.wlan_en = MSM_WLAN_EN_GPIO;
 	msm_wl1251_pdata.irq = gpio_to_irq(MSM_WIFI_IRQ_GPIO);
 	if (msm_wl1251_pdata.irq < 0)
 		goto fail;
