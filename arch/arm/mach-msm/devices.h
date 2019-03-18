@@ -147,6 +147,9 @@ extern struct platform_device msm_device_otg;
 #ifdef CONFIG_SIERRA_GPIO_WAKEN
 extern struct platform_device wake_n_gpio;
 #endif
+#ifdef CONFIG_SIERRA_EXT_GPIO
+extern struct platform_device ext_gpio;
+#endif
 /* SWISTOP */
 extern struct platform_device msm_android_usb_device;
 extern struct platform_device msm_android_usb_hsic_device;

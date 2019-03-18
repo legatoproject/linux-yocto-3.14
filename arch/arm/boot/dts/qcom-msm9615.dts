@@ -14,8 +14,8 @@
 #include "skeleton.dtsi"
 
 / {
-	model = "QCT MSM9615 CDP";
-	compatible = "qcom,msm9615";
+   model = "QCT MSM9615 CDP";
+   compatible = "qcom,msm9615";
 
     msm_nand@1b400000 {
         compatible = "micron,mt29f4g08", "onfi-flash";
@@ -65,5 +65,84 @@
             label = "user3";
             reg = <0x15000000 0x200000>;
         };
+    };
+
+    sierra_gpio {
+        compatible = "sierra,gpio";
+        alias-2 = <59 0>;
+        alias-6 = <66 0>;
+        alias-7 = <79 0>;
+        alias-8 = <29 0>;
+        alias-13 = <84 0>;
+        alias-16 = <62 0>;
+        alias-17 = <68 0>;
+        alias-18 = <67 0>;
+        alias-19 = <65 0>;
+        alias-21 = <50 0>;
+        alias-22 = <49 0>;
+        alias-23 = <54 0>;
+        alias-24 = <61 0>;
+        alias-28 = <24 0>;
+        alias-29 = <25 0>;
+        alias-30 = <26 0>;
+        alias-31 = <27 0>;
+        alias-32 = <30 0>;
+        alias-33 = <78 0>;
+#ifdef CONFIG_GPIO_SWIMCU
+        alias-34 = <100 0>;
+        alias-35 = <101 0>;
+        alias-36 = <102 0>;
+        alias-37 = <103 0>;
+        alias-38 = <104 0>;
+        alias-39 = <105 0>;
+        alias-40 = <106 0>;
+        alias-41 = <107 0>;
+#endif /* CONFIG_GPIO_SWIMCU */
+        alias-42 = <80 0>;
+        alias-RI = <62 0>;
+        alias-DTR = <68 0>;
+        alias-DCD = <67 0>;
+        alias-DSR = <65 0>;
+        // WIFI aliases
+        alias-WLAN_EN = <29 0>;
+        alias-WIFI_IRQ = <80 0>;
+    };
+
+    msm_gpio {
+        compatible = "sierra,msm_gpio";
+        gpio-bit-map = <59 1>,
+                       <66 5>,
+                       <79 6>,
+                       <29 7>,
+                       <84 12>,
+                       <62 15>,
+                       <68 16>,
+                       <67 17>,
+                       <65 18>,
+                       <50 20>,
+                       <49 21>,
+                       <54 22>,
+                       <61 23>,
+                       <24 27>,
+                       <25 28>,
+                       <26 29>,
+                       <27 30>,
+                       <30 31>,
+                       <78 32>,
+#ifdef CONFIG_GPIO_SWIMCU
+                       <100 33>,
+                       <101 34>,
+                       <102 35>,
+                       <103 36>,
+                       <104 37>,
+                       <105 38>,
+                       <106 39>,
+                       <107 40>,
+#endif /* CONFIG_GPIO_SWIMCU */
+                       <42 80 41>;
+        gpio-RI = <62>;
+        gpio-DTR = <68>;
+        gpio-DCD = <67>;
+        gpio-DSR = <65>;
     };
 };

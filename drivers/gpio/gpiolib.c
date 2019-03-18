@@ -18,8 +18,10 @@
 #include "gpiolib.h"
 
 #ifdef CONFIG_SIERRA_EXT_GPIO
-#include <linux/sierra_bsudefs.h>
-#include <../arch/arm/mach-msm/board-9615.h>
+#include <../base/base.h>
+#include <linux/sierra_gpio.h>
+
+static struct class gpio_class;
 #endif /*CONFIG_SIERRA_EXT_GPIO*/
 
 
@@ -52,34 +54,6 @@
  */
 static DEFINE_SPINLOCK(gpio_lock);
 
-struct gpio_desc {
-	struct gpio_chip	*chip;
-	unsigned long		flags;
-/* flag symbols are bit numbers */
-#define FLAG_REQUESTED	0
-#define FLAG_IS_OUT	1
-#define FLAG_EXPORT	2	/* protected by sysfs_lock */
-#define FLAG_SYSFS	3	/* exported via /sys/class/gpio/control */
-#define FLAG_TRIG_FALL	4	/* trigger on falling edge */
-#define FLAG_TRIG_RISE	5	/* trigger on rising edge */
-#define FLAG_ACTIVE_LOW	6	/* value has active low */
-#define FLAG_OPEN_DRAIN	7	/* Gpio is open drain type */
-#define FLAG_OPEN_SOURCE 8	/* Gpio is open source type */
-#define FLAG_USED_AS_IRQ 9	/* GPIO is connected to an IRQ */
-#define FLAG_IS_UP	10
-#ifdef CONFIG_SIERRA_EXT_GPIO
-#define FLAG_USE_ALIAS_IONAME 11
-#endif
-
-#define ID_SHIFT	16	/* add new flags before this one */
-
-#define GPIO_FLAGS_MASK		((1 << ID_SHIFT) - 1)
-#define GPIO_TRIGGER_MASK	(BIT(FLAG_TRIG_FALL) | BIT(FLAG_TRIG_RISE))
-
-#ifdef CONFIG_DEBUG_FS
-	const char		*label;
-#endif
-};
 static struct gpio_desc gpio_desc[ARCH_NR_GPIOS];
 
 #define GPIO_OFFSET_VALID(chip, offset) (offset >= 0 && offset < chip->ngpio)
@@ -91,266 +65,6 @@ static LIST_HEAD(gpio_chips);
 #ifdef CONFIG_GPIO_SYSFS
 static DEFINE_IDR(dirent_idr);
 #endif
-
-#ifdef CONFIG_SIERRA_EXT_GPIO
-/* Define use cases for GPIO - Unallocated GPIO cannot be
- * exposed in sysfs */
-#define FUNCTION_UNALLOCATED   0
-#define FUNCTION_EMBEDDED_HOST 1
-
-#define IONAME_PREFIX "gpio"
-#define GPIO_NAME_MAX 4 /* max characters in ioname following the prefix, any more will be ignored */
-#define IONAME_MAX (sizeof(IONAME_PREFIX) + GPIO_NAME_MAX)
-
-#define GPIO_NAME_RI "RI"
-#define GPIO_NAME_DSR "DSR"
-#define GPIO_NAME_DCD "DCD"
-#define GPIO_NAME_DTR "DTR"
-
-/* GPIOs with dual function as UART have aliases of rs232 signals */
-enum gpio_uart_alias {
-	GPIO_UART_RI,
-	GPIO_UART_DTR,
-	GPIO_UART_DCD,
-	GPIO_UART_DSR,
-	GPIO_UART_MAX,
-};
-static int gpio_uart_alias_map[GPIO_UART_MAX];
-
-struct ext_gpio_map{
-	char *gpio_name;
-	int gpio_num;
-	unsigned function;
-};
-
-/* An alias may be defined for each gpio, but must follow immediately after the primary gpio name */
-/* AR has 10 standard GPIO + RI at the end of the table */
-#define NR_EXT_GPIOS_AR ARRAY_SIZE(ext_gpio_ar)
-static struct ext_gpio_map ext_gpio_ar[]={
-	{"1", 80,FUNCTION_UNALLOCATED},
-	{"2", 73,FUNCTION_UNALLOCATED},
-	{"3", 30,FUNCTION_UNALLOCATED},
-	{"4", 29,FUNCTION_UNALLOCATED},
-	{"5",  4,FUNCTION_UNALLOCATED},
-	{"6", 72,FUNCTION_UNALLOCATED},
-	{"7", 21,FUNCTION_UNALLOCATED},
-	{"8" ,60,FUNCTION_UNALLOCATED},
-	{"9", 45,FUNCTION_UNALLOCATED},
-	{"10",40,FUNCTION_UNALLOCATED},
-	{"11",66,FUNCTION_UNALLOCATED},
-	{GPIO_NAME_RI,66,FUNCTION_UNALLOCATED} /* RI is an alias of 11 */
-};
-
-static struct ext_gpio_map ext_gpio_ar7552rd[]={
-	{"1", 80,FUNCTION_UNALLOCATED},
-	{"2", 73,FUNCTION_UNALLOCATED},
-	{"3", 30,FUNCTION_UNALLOCATED},
-	{"4", 29,FUNCTION_UNALLOCATED},
-	{"5",  4,FUNCTION_UNALLOCATED},
-	{"6", 72,FUNCTION_UNALLOCATED},
-	{"7", 39,FUNCTION_UNALLOCATED},
-	{"8" ,60,FUNCTION_UNALLOCATED},
-	{"9", 45,FUNCTION_UNALLOCATED},
-	{"10",40,FUNCTION_UNALLOCATED},
-	{"11",66,FUNCTION_UNALLOCATED},
-	{GPIO_NAME_RI,66,FUNCTION_UNALLOCATED} /* RI is an alias of 11 */
-};
-
-static struct ext_gpio_map ext_gpio_ar7554rd[]={
-	{"1", 80,FUNCTION_UNALLOCATED},
-	{"2", 73,FUNCTION_UNALLOCATED},
-	{"3", 30,FUNCTION_UNALLOCATED},
-	{"4", 29,FUNCTION_UNALLOCATED},
-	{"5",  4,FUNCTION_UNALLOCATED},
-	{"6", 72,FUNCTION_UNALLOCATED},
-	{"7", 69,FUNCTION_UNALLOCATED},
-	{"8" ,60,FUNCTION_UNALLOCATED},
-	{"9", 45,FUNCTION_UNALLOCATED},
-	{"10",40,FUNCTION_UNALLOCATED},
-	{"11",66,FUNCTION_UNALLOCATED},
-	{GPIO_NAME_RI,66,FUNCTION_UNALLOCATED} /* RI is an alias of 11 */
-};
-
-#define NR_EXT_GPIOS_CF3 ARRAY_SIZE(ext_gpio_cf3)
-static struct ext_gpio_map ext_gpio_cf3[]={
-	{"2", 59,FUNCTION_UNALLOCATED},
-	{"6", 66,FUNCTION_UNALLOCATED},
-	{"7", 79,FUNCTION_UNALLOCATED},
-	{"8", 29,FUNCTION_UNALLOCATED},
-	{"13",84,FUNCTION_UNALLOCATED},
-	{"16",62,FUNCTION_UNALLOCATED},
-	{GPIO_NAME_RI,62,FUNCTION_UNALLOCATED},  /* RI is an alias of 16 */
-	{"17",68,FUNCTION_UNALLOCATED},
-	{GPIO_NAME_DTR,68,FUNCTION_UNALLOCATED}, /* DTR is an alias of 17 */
-	{"18",67,FUNCTION_UNALLOCATED},
-	{GPIO_NAME_DCD,67,FUNCTION_UNALLOCATED}, /* DCD is an alias of 18 */
-	{"19",65,FUNCTION_UNALLOCATED},
-	{GPIO_NAME_DSR,65,FUNCTION_UNALLOCATED}, /* DSR is an alias of 19 */
-	{"21",50,FUNCTION_UNALLOCATED},
-	{"22",49,FUNCTION_UNALLOCATED},
-	{"23",54,FUNCTION_UNALLOCATED},
-	{"24",61,FUNCTION_UNALLOCATED},
-	{"28",24,FUNCTION_UNALLOCATED},
-	{"29",25,FUNCTION_UNALLOCATED},
-	{"30",26,FUNCTION_UNALLOCATED},
-	{"31",27,FUNCTION_UNALLOCATED},
-	{"25",73,FUNCTION_UNALLOCATED},
-	{"32",30,FUNCTION_UNALLOCATED},
-	{"33",78,FUNCTION_UNALLOCATED},
-#ifdef CONFIG_GPIO_SWIMCU
-	{"34",SWIMCU_GPIO_TO_SYS(0),FUNCTION_UNALLOCATED},
-	{"35",SWIMCU_GPIO_TO_SYS(1),FUNCTION_UNALLOCATED},
-	{"36",SWIMCU_GPIO_TO_SYS(2),FUNCTION_UNALLOCATED},
-	{"37",SWIMCU_GPIO_TO_SYS(3),FUNCTION_UNALLOCATED},
-	{"38",SWIMCU_GPIO_TO_SYS(4),FUNCTION_UNALLOCATED},
-	{"39",SWIMCU_GPIO_TO_SYS(5),FUNCTION_UNALLOCATED},
-	{"40",SWIMCU_GPIO_TO_SYS(6),FUNCTION_UNALLOCATED},
-	{"41",SWIMCU_GPIO_TO_SYS(7),FUNCTION_UNALLOCATED},
-#endif /* CONFIG_GPIO_SWIMCU */
-	{"42",80,FUNCTION_UNALLOCATED}
-};
-
-/* Product specific assignments in gpiolib_sysfs_init() */
-static struct ext_gpio_map *ext_gpio = NULL;
-static struct gpio_chip gpio_ext_chip = {
-		.label  = "msmextgpio",
-		.base   = 1,
-};
-
-/**
- * gpio_map_name_to_num() - Return the internal GPIO number for an
- *                         external GPIO name
- * @*buf: The external GPIO name (may include a trailing <lf>)
- * @*alias: pointer to return whether this name is an alias for another table entry
- * Context: After gpiolib_sysfs_init has setup the gpio device
- *
- * Returns a negative number if the gpio_name is not mapped to a number
- * or if the access to the GPIO is prohibited.
- *
- */
-static int gpio_map_name_to_num(const char *buf, bool *alias)
-{
-	int i;
-	int gpio_num = -1;
-	char gpio_name[GPIO_NAME_MAX+1];
-	int len;
-
-	len = min( strlen(buf), sizeof(gpio_name)-1 );
-	memcpy(gpio_name, buf, len);
-	if ((len > 0) && (gpio_name[len-1] < 0x20))
-		len--; /* strip trailing <0x0a> from buf for compare ops */
-	gpio_name[len] = 0;
-
-	if (ext_gpio != NULL)
-	{
-		for(i = 0; i < gpio_ext_chip.ngpio; i++)
-		{
-			if( strncasecmp( gpio_name, ext_gpio[i].gpio_name, GPIO_NAME_MAX ) == 0 )
-			{
-				if(FUNCTION_EMBEDDED_HOST == ext_gpio[i].function)
-				{
-					gpio_num = ext_gpio[i].gpio_num;
-					if ( (i > 0) && (gpio_num == ext_gpio[i-1].gpio_num) )
-						*alias = true;
-					else
-						*alias = false;
-					return gpio_num;
-				}
-				else
-				{
-					pr_info("%s: gpio%s is not supported\n", __func__, ext_gpio[i].gpio_name);
-					return -1;
-				}
-			}
-		}
-	}
-	pr_info("%s: Can not find GPIO %s\n", __func__, gpio_name);
-	return -1;
-}
-
-/**
- * gpio_map_num_to_name() - Return the external GPIO name for an
- *                         internal GPIO number
- * @gpio_num: The internal (i.e. MDM) GPIO pin number
- * @alias: Return the second entry if 2 names are mapped to the same internal GPIO number
- * Context: After gpiolib_sysfs_init has setup the gpio device
- *
- * Returns NULL if the gpio_num is not mapped to a name
- * or if the access to the GPIO is prohibited.
- *
- */
-static char *gpio_map_num_to_name(int gpio_num, bool alias)
-{
-	int i;
-
-	if (ext_gpio != NULL)
-	{
-		for(i = 0; i < gpio_ext_chip.ngpio; i++)
-		{
-			if(gpio_num == ext_gpio[i].gpio_num)
-			{
-				if (alias)
-				{
-					alias = false; /* skip to the next entry */
-				}
-				else if(FUNCTION_EMBEDDED_HOST == ext_gpio[i].function)
-				{
-					return ext_gpio[i].gpio_name;
-				}
-				else
-				{
-					pr_info("%s: gpio%s is not supported\n", __func__, ext_gpio[i].gpio_name);
-					return NULL;
-				}
-			}
-		}
-	}
-	pr_info("%s: Can not find GPIO %d\n", __func__, gpio_num);
-	return NULL;
-}
-
-/**
- * gpio_sync_ri() - sync gpio RI, DSR, DCD, DTR functions with riowner
- * Context: After ext_gpio, and gpio_uart_alias_map have been set
- * Note: gpio DSR, DCD, and DTR are only supported on WPx5
- *
- * Returns 1 if apps, 0 if modem, or -1 if RI not found.
- */
-static void gpio_sync_ri( void )
-{
-	int riowner;
-	int i;
-	int gpio_uart;
-	int gpio_uart_func;
-
-	/* Check if RI gpio is owned by APP core
-	 * In this case, set that gpio for RI management
-	 * RI owner: 1 APP , 0 Modem. See AT!RIOWNER
-	 * Note: If RI owner is APP, then APP also controls DSR, DCD, and DTR
-	 */
-	riowner = bsgetriowner();
-	if (1 == riowner) {
-		pr_info( "%s: RI owner is APP\n", __func__);
-		gpio_uart_func = FUNCTION_EMBEDDED_HOST;
-	}
-	else {
-		pr_info( "%s: RI owner is Modem\n", __func__);
-		gpio_uart_func = FUNCTION_UNALLOCATED;
-	}
-
-	for (i = 0; i < GPIO_UART_MAX; i++) {
-		gpio_uart = gpio_uart_alias_map[i];
-		if (gpio_uart >= 0) {
-			ext_gpio[gpio_uart].function = gpio_uart_func;
-		}
-		/* also sync the numeric equivalent, if any */
-		if ((gpio_uart > 0) && (ext_gpio[gpio_uart-1].gpio_num == ext_gpio[gpio_uart].gpio_num)) {
-			ext_gpio[gpio_uart-1].function = ext_gpio[gpio_uart].function;
-			pr_debug( "->gpio%s = %d\n", ext_gpio[gpio_uart-1].gpio_name, ext_gpio[gpio_uart-1].function );
-		}
-	}
-}
-#endif /*CONFIG_SIERRA_EXT_GPIO*/
 
 static int gpiod_request(struct gpio_desc *desc, const char *label);
 static void gpiod_free(struct gpio_desc *desc);
@@ -999,10 +713,36 @@ static ssize_t chip_mask_show(struct device *dev,
 			       struct device_attribute *attr, char *buf)
 {
 	const struct gpio_chip	*chip = dev_get_drvdata(dev);
+	u64 mask = 0;
 
-	return sprintf(buf, "0x%08x%08x\n", (u32)(chip->mask>>32)&0xFFFFFFFF, (u32)chip->mask&0xFFFFFFFF);
+	if (chip->bitmask_valid)
+		mask = chip->mask[0];
+	return sprintf(buf, "0x%08x%08x\n", (u32)(mask >> 32), (u32)mask);
 }
 static DEVICE_ATTR(mask, 0444, chip_mask_show, NULL);
+
+/**
+ * chip_mask_v2_show() - Display the GPIO chip mask in v2 format
+ * @dev: The device
+ * @buf: The buffer (1 page) to put the GPIO chip mask
+ *
+ * Returns the number of characters to display
+ */
+static ssize_t chip_mask_v2_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+       const struct gpio_chip	*chip = dev_get_drvdata(dev);
+       int			len = 0;
+       int			i;
+       size_t			nbit = sizeof(u64) * 8;
+
+	for (i = 0; i < chip->ngpio; i += 8) {
+		len += sprintf(buf + len, "%02llx ",
+				(chip->bitmask_valid ?
+					(chip->mask[i / nbit] >> (i % nbit)) & 0xff : 0xff));
+	}
+	return len + sprintf(buf + len, "\n");
+}
+static DEVICE_ATTR(mask_v2, 0444, chip_mask_v2_show, NULL);
 #endif /*CONFIG_SIERRA_EXT_GPIO*/
 
 static const struct attribute *gpiochip_attrs[] = {
@@ -1011,6 +751,7 @@ static const struct attribute *gpiochip_attrs[] = {
 	&dev_attr_ngpio.attr,
 #ifdef CONFIG_SIERRA_EXT_GPIO
 	&dev_attr_mask.attr,
+	&dev_attr_mask_v2.attr,
 #endif /*CONFIG_SIERRA_EXT_GPIO*/
 	NULL,
 };
@@ -1032,12 +773,9 @@ static ssize_t export_store(struct class *class,
 	long			gpio;
 	struct gpio_desc	*desc;
 	int			status;
+
 #ifdef CONFIG_SIERRA_EXT_GPIO	
-	bool alias = false;
-
-	gpio_sync_ri();
-
-	status = gpio = gpio_map_name_to_num(buf, &alias);
+	status = gpio_map_name_to_num(buf, len, false, &gpio);
 #else
 	status = kstrtol(buf, 0, &gpio);
 #endif /*CONFIG_SIERRA_EXT_GPIO*/
@@ -1051,14 +789,6 @@ static ssize_t export_store(struct class *class,
 		return -EINVAL;
 	}
 
-#ifdef CONFIG_SIERRA_EXT_GPIO
-	if (alias) {
-		set_bit(FLAG_USE_ALIAS_IONAME, &desc->flags);
-	}
-	else {
-		clear_bit(FLAG_USE_ALIAS_IONAME, &desc->flags);
-	}
-#endif /*CONFIG_SIERRA_EXT_GPIO*/
 	/* No extra locking here; FLAG_SYSFS just signifies that the
 	 * request and export were done on behalf of userspace, so
 	 * they may be undone on its behalf too.
@@ -1088,9 +818,11 @@ static ssize_t unexport_store(struct class *class,
 	struct gpio_desc	*desc;
 	int			status;
 #ifdef CONFIG_SIERRA_EXT_GPIO	
-	bool alias = false;
+	const char		*ioname;
+	char			ioname_buf[128];
+	int			index;
 
-	status = gpio = gpio_map_name_to_num(buf, &alias);
+	status = gpio = gpio_map_name_to_num(buf, len, false, &gpio);
 #else
 	status = kstrtol(buf, 0, &gpio);
 #endif /*CONFIG_SIERRA_EXT_GPIO*/
@@ -1114,6 +846,15 @@ static ssize_t unexport_store(struct class *class,
 		status = 0;
 		gpiod_free(desc);
 	}
+
+#ifdef CONFIG_SIERRA_EXT_GPIO
+	gpio_remove_alias_link(desc);
+
+	while ((ioname = gpio_map_num_to_name(desc_to_gpio(desc), true, &index))) {
+		snprintf(ioname_buf, sizeof(ioname_buf), "gpio%s", ioname);
+		sysfs_remove_link(&gpio_class.p->subsys.kobj, ioname_buf);
+	}
+#endif
 
 done:
 	if (status)
@@ -1157,10 +898,9 @@ int gpiod_export(struct gpio_desc *desc, bool direction_may_change)
 	const char		*ioname = NULL;
 	struct device		*dev;
 	int			offset;
-
 #ifdef CONFIG_SIERRA_EXT_GPIO
-	char 			*gpioname;
-	char 			ioname_buf[IONAME_MAX+1] = IONAME_PREFIX;
+	char			ioname_buf[128];
+	int			index = 0;
 #endif
 
 	/* can't export until sysfs is available ... */
@@ -1197,14 +937,14 @@ int gpiod_export(struct gpio_desc *desc, bool direction_may_change)
 		ioname = desc->chip->names[offset];
 
 #ifdef CONFIG_SIERRA_EXT_GPIO
-	gpioname = gpio_map_num_to_name(desc_to_gpio(desc), (test_bit(FLAG_USE_ALIAS_IONAME, &desc->flags)));
-	if( NULL == gpioname ) {
-		status = -EPERM;
-		goto unlock_done;
-	}
-	strncat(ioname_buf, gpioname, GPIO_NAME_MAX);
+	ioname = gpio_map_num_to_name(desc_to_gpio(desc), true, &index);
+	if (ioname)
+		snprintf(ioname_buf, sizeof(ioname_buf), "gpio%s", ioname);
+	else
+		snprintf(ioname_buf, sizeof(ioname_buf), "gpio_raw%u", desc_to_gpio(desc));
 	ioname = ioname_buf;
 #endif /*CONFIG_SIERRA_EXT_GPIO*/
+
 	dev = device_create(&gpio_class, desc->chip->dev, MKDEV(0, 0),
 			    desc, ioname ? ioname : "gpio%u",
 			    desc_to_gpio(desc));
@@ -1231,11 +971,17 @@ int gpiod_export(struct gpio_desc *desc, bool direction_may_change)
 			goto fail_unregister_device;
 	}
 
+#ifdef CONFIG_SIERRA_EXT_GPIO
+	gpio_create_alias_link(desc, dev);
+
+	while ((ioname = gpio_map_num_to_name(desc_to_gpio(desc), true, &index))) {
+		snprintf(ioname_buf, sizeof(ioname_buf), "gpio%s", ioname);
+		status = sysfs_create_link(&gpio_class.p->subsys.kobj, &dev->kobj, ioname_buf);
+	}
+#endif
+
 	set_bit(FLAG_EXPORT, &desc->flags);
 
-#ifdef CONFIG_SIERRA_EXT_GPIO
-unlock_done:
-#endif /*CONFIG_SIERRA_EXT_GPIO*/
 	mutex_unlock(&sysfs_lock);
 	return 0;
 
@@ -1383,6 +1129,14 @@ void gpiod_unexport(struct gpio_desc *desc)
 }
 EXPORT_SYMBOL_GPL(gpiod_unexport);
 
+#ifdef CONFIG_SIERRA_EXT_GPIO
+struct class *gpio_class_get(void)
+{
+	return &gpio_class;
+}
+EXPORT_SYMBOL_GPL(gpio_class_get);
+#endif
+
 static int gpiochip_export(struct gpio_chip *chip)
 {
 	int		status;
@@ -1407,6 +1161,11 @@ static int gpiochip_export(struct gpio_chip *chip)
 		status = PTR_ERR(dev);
 	chip->exported = (status == 0);
 	mutex_unlock(&sysfs_lock);
+
+#ifdef CONFIG_SIERRA_EXT_GPIO
+	if (!status)
+		gpiochip_add_export_v2(dev, chip);
+#endif
 
 	if (status) {
 		unsigned long	flags;
@@ -1433,6 +1192,9 @@ static void gpiochip_unexport(struct gpio_chip *chip)
 	mutex_lock(&sysfs_lock);
 	dev = class_find_device(&gpio_class, NULL, chip, match_export);
 	if (dev) {
+#ifdef CONFIG_SIERRA_EXT_GPIO
+		gpiochip_del_unexport_v2(dev, chip);
+#endif
 		put_device(dev);
 		device_unregister(dev);
 		chip->exported = false;
@@ -1450,10 +1212,6 @@ static int __init gpiolib_sysfs_init(void)
 	int		status;
 	unsigned long	flags;
 	unsigned	gpio;
-#ifdef CONFIG_SIERRA_EXT_GPIO
-	long		ext_num;
-	enum bshwtype hwtype;
-#endif
 
 	status = class_register(&gpio_class);
 	if (status < 0)
@@ -1466,77 +1224,6 @@ static int __init gpiolib_sysfs_init(void)
 	 * registered, and so arch_initcall() can always gpio_export().
 	 */
 	spin_lock_irqsave(&gpio_lock, flags);
-
-#ifdef CONFIG_SIERRA_EXT_GPIO
-	/* Assign product specific GPIO mapping */
-	if (bssupport(BSFEATURE_CF3))
-	{
-		gpio_ext_chip.ngpio = NR_EXT_GPIOS_CF3;
-		ext_gpio = ext_gpio_cf3;
-	}
-	else if (bssupport(BSFEATURE_AR))
-	{
-		hwtype = bsgethwtype();
-		gpio_ext_chip.ngpio = NR_EXT_GPIOS_AR;
-		if (BSAR7552RD == hwtype)
-		{
-			ext_gpio = ext_gpio_ar7552rd;
-		}
-		else if ((BSAR7554RD == hwtype) || (BSAR8652 == hwtype))
-		{
-			ext_gpio = ext_gpio_ar7554rd;
-		}
-		else
-		{
-			ext_gpio = ext_gpio_ar;
-		}
-	}
-	else
-	{
-		pr_err( "%s: No sysfs entries for gpio on unsupported product family\n", __func__ );
-		gpio_ext_chip.ngpio = 0;
-	}
-
-	gpio_ext_chip.mask = bsgetgpioflag();
-	/* bit X in mask represents GPIO_(X+1) */
-#ifdef CONFIG_GPIO_SWIMCU
-	/* for MCU, expose 38 - 41 (not accessible to mpss) */
-	gpio_ext_chip.mask |= (0xFULL << 37);
-#endif
-	for(gpio = 0; gpio < gpio_ext_chip.ngpio; gpio++)
-	{
-		if (kstrtol(ext_gpio[gpio].gpio_name, 0, &ext_num) == 0) {
-			if (gpio_ext_chip.mask & (0x1ULL << (ext_num - 1))) {
-				ext_gpio[gpio].function = FUNCTION_EMBEDDED_HOST;
-			}
-			else {
-				ext_gpio[gpio].function = FUNCTION_UNALLOCATED;
-			}
-			/* also sync alias, if present */
-			if ((gpio < gpio_ext_chip.ngpio-1) && (ext_gpio[gpio+1].gpio_num == ext_gpio[gpio].gpio_num)) {
-				ext_gpio[gpio+1].function = ext_gpio[gpio].function;
-				pr_debug( "->gpio%s = %d\n", ext_gpio[gpio+1].gpio_name, ext_gpio[gpio+1].function );
-			}
-		}
-
-		if (strcasecmp(ext_gpio[gpio].gpio_name, GPIO_NAME_RI) == 0) {
-			gpio_uart_alias_map[GPIO_UART_RI] = gpio;
-		}
-		else if (strcasecmp(ext_gpio[gpio].gpio_name, GPIO_NAME_DSR) == 0) {
-			gpio_uart_alias_map[GPIO_UART_DSR] = gpio;
-		}
-		else if (strcasecmp(ext_gpio[gpio].gpio_name, GPIO_NAME_DCD) == 0) {
-			gpio_uart_alias_map[GPIO_UART_DCD] = gpio;
-		}
-		else if (strcasecmp(ext_gpio[gpio].gpio_name, GPIO_NAME_DTR) == 0) {
-			gpio_uart_alias_map[GPIO_UART_DTR] = gpio;
-		}
-	}
-	gpio_sync_ri();
-
-	gpio_ext_chip.dev = gpio_desc[0].chip->dev;
-	status = gpiochip_export(&gpio_ext_chip);
-#else
 	for (gpio = 0; gpio < ARCH_NR_GPIOS; gpio++) {
 		struct gpio_chip	*chip;
 
@@ -1548,8 +1235,6 @@ static int __init gpiolib_sysfs_init(void)
 		status = gpiochip_export(chip);
 		spin_lock_irqsave(&gpio_lock, flags);
 	}
-#endif /*CONFIG_SIERRA_EXT_GPIO*/
-
 	spin_unlock_irqrestore(&gpio_lock, flags);
 
 	return status;
@@ -3097,27 +2782,13 @@ static void gpiolib_dbg_show(struct seq_file *s, struct gpio_chip *chip)
 	int			is_out;
 	int			is_irq;
 
-#ifdef CONFIG_SIERRA_EXT_GPIO
-	char 			*gpioname;
-#endif
-
 	for (i = 0; i < chip->ngpio; i++, gpio++, gdesc++) {
-#ifdef CONFIG_SIERRA_EXT_GPIO
-		if (!test_bit(FLAG_EXPORT, &gdesc->flags) ||
-			(NULL == (gpioname = gpio_map_num_to_name(gpio,
-				(test_bit(FLAG_USE_ALIAS_IONAME, &gdesc->flags))))))
-#else
 		if (!test_bit(FLAG_REQUESTED, &gdesc->flags))
-#endif
 			continue;
 		gpiod_get_direction(gdesc);
 		is_out = test_bit(FLAG_IS_OUT, &gdesc->flags);
 		is_irq = test_bit(FLAG_USED_AS_IRQ, &gdesc->flags);
-#ifdef CONFIG_SIERRA_EXT_GPIO
-		seq_printf(s, " gpio-%-3s", gpioname);
-#else
 		seq_printf(s, " gpio-%-3d", gpio);
-#endif /* CONFIG_SIERRA_EXT_GPIO */
 		seq_printf(s, " (%-20.20s) %s %s %s",
 			gdesc->label,
 			is_out ? "out" : "in ",

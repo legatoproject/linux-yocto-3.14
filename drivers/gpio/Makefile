@@ -102,6 +102,7 @@ obj-$(CONFIG_GPIO_XTENSA)	+= gpio-xtensa.o
 obj-$(CONFIG_GPIO_PM8XXX)	+= pm8xxx-gpio.o
 obj-$(CONFIG_GPIO_PM8XXX_MPP) 	+= pm8xxx-mpp.o
 #SIERRA
-obj-$(CONFIG_SIERRA_GPIO_WAKEN) += sierra_gpio_wake_n.o
+obj-$(CONFIG_SIERRA_EXT_GPIO)	+= sierra_gpio.o
+obj-$(CONFIG_SIERRA_GPIO_WAKEN)	+= sierra_gpio_wake_n.o
 obj-$(CONFIG_GPIO_SWIMCU)	+= gpio-swimcu.o
 #SIERRA

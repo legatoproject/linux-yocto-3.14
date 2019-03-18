@@ -172,6 +172,12 @@ struct platform_device wake_n_gpio = {
 	.id		= -1,
 };
 #endif
+#ifdef CONFIG_SIERRA_EXT_GPIO
+struct platform_device ext_gpio = {
+	.name		= "sierra_gpio",
+	.id		= -1,
+};
+#endif
 
 #ifdef CONFIG_SIERRA_HSUSB_RESUME
 #define MSM_HSUSB_RESUME_GPIO	82

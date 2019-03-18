@@ -24,6 +24,13 @@
 #include <linux/irqdomain.h>
 #include <linux/of.h>
 
+#ifdef CONFIG_SIERRA_EXT_GPIO
+#include <linux/slab.h>
+#include <linux/sierra_gpio.h>
+#include <linux/sierra_bsudefs.h>
+#include <../../../drivers/gpio/gpiolib.h>
+#endif
+
 #include <asm/mach/irq.h>
 
 #include <mach/msm_iomap.h>
@@ -555,6 +562,15 @@ static struct lock_class_key msm_gpio_lock_class;
 static int msm_gpio_probe(void)
 {
 	int i, irq, ret;
+#if CONFIG_SIERRA_EXT_GPIO
+	struct device_node	*np;
+	int			bsfeature = -1;
+	u64			bsgpiomask;
+	char			*featurestr;
+	int			nmap;
+	int			igpio;
+	int			ibit;
+#endif
 
 	spin_lock_init(&tlmm_lock);
 	bitmap_zero(msm_gpio.enabled_irqs, NR_MSM_GPIOS);
@@ -579,6 +595,115 @@ static int msm_gpio_probe(void)
 				ret);
 		return ret;
 	}
+
+#if CONFIG_SIERRA_EXT_GPIO
+	bsfeature = (bssupport(BSFEATURE_CF3) ? 1 : 0);
+	/* Assign product specific GPIO mapping */
+	bsgpiomask = bsgetgpioflag();
+	/*
+	 * AR set the bit to 1 when the GPIO if not usable or allocatable to APP core
+	 * WP set the bit to 1 when the GPIO is allocated to APP core
+	 * Invert the bit mask in case of AR to have a compatibility between AR and WP
+	 */
+	switch (bsfeature) {
+		case 0:
+			featurestr = "ar";
+			bsgpiomask = ~bsgpiomask;
+			break;
+		case 1:
+			featurestr = "wp";
+			break;
+	};
+	pr_info("Feature \"%s\" (%d)\n", featurestr, bsfeature);
+	pr_info("Cores GPIO mask 0x%llx\n", bsgpiomask);
+	msm_gpio.gpio_chip.mask = kzalloc((ARCH_NR_GPIOS + sizeof(u64)*8 - 1) / (sizeof(u64)*8), GFP_KERNEL);
+	if (!msm_gpio.gpio_chip.mask)
+		return -ENOMEM;
+
+	msm_gpio.gpio_chip.mask[0] = bsgpiomask;
+	msm_gpio.gpio_chip.max_bit = -1;
+
+	for (igpio = 0; igpio < msm_gpio.gpio_chip.ngpio; igpio++) {
+		struct gpio_desc	*desc;
+
+		desc = gpio_to_desc(igpio);
+		if (desc)
+			desc->bit_in_mask = -1;
+	}
+	np = of_find_compatible_node(NULL, NULL, "sierra,msm_gpio");
+	if (!np) {
+		pr_err("Cannot find device tree node compatible \"%s\"\n",
+			"sierra,msm_gpio");
+		return -ENOENT;
+	}
+
+	nmap = of_property_count_u32_elems(np, "gpio-bit-map");
+	pr_err("gpio-bit-map = %d\n", nmap);
+	for (i = 0; i < nmap; i += 2) {
+		struct gpio_desc	*desc;
+
+		/*
+		 * Read GPIO num and bit to test
+		 */
+		of_property_read_u32_index(np, "gpio-bit-map", i, &igpio);
+		ibit = -1;
+		of_property_read_u32_index(np, "gpio-bit-map", i+1, &ibit);
+		desc = gpio_to_desc(igpio);
+		if (desc && (ibit >= 0) && (ibit < msm_gpio.gpio_chip.ngpio))
+			desc->bit_in_mask = ibit;
+		pr_debug("gpio-bit-map = <%d %d>\n", igpio, ibit);
+	}
+	msm_gpio.gpio_chip.bitmask_valid = true;
+	igpio = -1;
+	if (0 == (nmap = of_property_read_u32_index(np, "gpio-RI", 0, &igpio))) {
+		struct gpio_desc	*desc;
+
+		desc = gpio_to_desc(igpio);
+		if (desc) {
+			set_bit(FLAG_RING_INDIC, &desc->flags);
+			pr_info("RI is GPIO %d\n", igpio);
+		}
+		else
+			pr_err("Invalid GPIO %d for RI\n", igpio);
+	}
+	igpio = -1;
+	if (0 == (nmap = of_property_read_u32_index(np, "gpio-DTR", 0, &igpio))) {
+		struct gpio_desc	*desc;
+
+		desc = gpio_to_desc(igpio);
+		if (desc) {
+			set_bit(FLAG_DTR, &desc->flags);
+			pr_info("DTR is GPIO %d\n", igpio);
+		}
+		else
+			pr_err("Invalid GPIO %d for DTR\n", igpio);
+	}
+	igpio = -1;
+	if (0 == (nmap = of_property_read_u32_index(np, "gpio-DCD", 0, &igpio))) {
+		struct gpio_desc	*desc;
+
+		desc = gpio_to_desc(igpio);
+		if (desc) {
+			set_bit(FLAG_DCD, &desc->flags);
+			pr_info("DCD is GPIO %d\n", igpio);
+		}
+		else
+			pr_err("Invalid GPIO %d for DCD\n", igpio);
+	}
+	igpio = -1;
+	if (0 == (nmap = of_property_read_u32_index(np, "gpio-DSR", 0, &igpio))) {
+		struct gpio_desc	*desc;
+
+		desc = gpio_to_desc(igpio);
+		if (desc) {
+			set_bit(FLAG_DSR, &desc->flags);
+			pr_info("DSR is GPIO %d\n", igpio);
+		}
+		else
+			pr_err("Invalid GPIO %d for DSR\n", igpio);
+	}
+#endif
+
 	return 0;
 }
 
@@ -588,6 +713,10 @@ static int msm_gpio_remove(void)
 
 	if (ret < 0)
 		return ret;
+
+	kfree(msm_gpio.gpio_chip.mask);
+	msm_gpio.gpio_chip.mask = NULL;
+	msm_gpio.gpio_chip.bitmask_valid = false;
 
 	irq_set_handler(TLMM_MSM_SUMMARY_IRQ, NULL);
 

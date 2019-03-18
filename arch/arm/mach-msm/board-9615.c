@@ -1382,6 +1382,9 @@ static struct platform_device *common_devices[] = {
 #ifdef CONFIG_SIERRA_GPIO_WAKEN
 	&wake_n_gpio,
 #endif
+#ifdef CONFIG_SIERRA_EXT_GPIO
+	&ext_gpio,
+#endif
 	&msm_device_hsic_peripheral,
 	&msm_device_gadget_peripheral,
 	&msm_device_hsusb_host,
