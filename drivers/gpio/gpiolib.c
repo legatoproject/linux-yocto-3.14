@@ -1313,10 +1313,24 @@ int gpiochip_add(struct gpio_chip *chip)
 	int		status = 0;
 	unsigned	id;
 	int		base = chip->base;
+	int		mask_array_size = 0;
+	u64		*mask = NULL;
 
 	if ((!gpio_is_valid(base) || !gpio_is_valid(base + chip->ngpio - 1))
 			&& base >= 0) {
 		status = -EINVAL;
+		goto fail;
+	}
+
+	/*
+	 * Allocate mask array, one bit per GPIO. Round-up to size of
+	 * array u64 element and calculate the number of u64 elements.
+	 */
+	mask_array_size = (chip->ngpio + 8 * sizeof(*mask) - 1) /
+				(8 * sizeof(*mask));
+	mask = (u64*)kzalloc(mask_array_size * sizeof(*mask) , GFP_KERNEL);
+	if (!mask) {
+		status = -ENOMEM;
 		goto fail;
 	}
 
@@ -1330,6 +1344,7 @@ int gpiochip_add(struct gpio_chip *chip)
 		}
 		chip->base = base;
 	}
+	chip->mask = mask;
 
 	status = gpiochip_add_to_list(chip);
 
@@ -1378,6 +1393,11 @@ int gpiochip_add(struct gpio_chip *chip)
 unlock:
 	spin_unlock_irqrestore(&gpio_lock, flags);
 fail:
+	if (mask) {
+		kfree(mask);
+		chip->mask = NULL;
+	}
+
 	/* failures here can mean systems won't boot... */
 	pr_err("%s: GPIOs %d..%d (%s) failed to register\n", __func__,
 		chip->base, chip->base + chip->ngpio - 1,
@@ -1418,6 +1438,9 @@ int gpiochip_remove(struct gpio_chip *chip)
 	}
 
 	spin_unlock_irqrestore(&gpio_lock, flags);
+
+	if (chip->mask)
+		kfree(chip->mask);
 
 	if (status == 0)
 		gpiochip_unexport(chip);
