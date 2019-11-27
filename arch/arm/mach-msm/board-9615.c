@@ -45,6 +45,9 @@
 #include <linux/wl12xx.h>
 #include <linux/gpio.h>
 #endif
+#if defined(CONFIG_GPIO_PCA953X) && defined(CONFIG_SIERRA_AIRLINK_COLUMBIA)
+#include <linux/platform_data/pca953x.h>
+#endif
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/hardware/gic.h>
@@ -978,6 +981,28 @@ static struct i2c_registry msm9615_i2c_devices_swimcu[] __initdata = {
 };
 #endif /* CONFIG_MFD_SWIMCU */
 
+#if defined(CONFIG_GPIO_PCA953X) && defined(CONFIG_SIERRA_AIRLINK_COLUMBIA)
+static struct pca953x_platform_data msm9615_gpio_expander_info = {
+	.gpio_base = 200,
+};
+
+static struct i2c_board_info tca6416_device_info[] __initdata = {
+	{
+		I2C_BOARD_INFO("tca6416", 0x20),
+		.platform_data = &msm9615_gpio_expander_info,
+	},
+};
+
+static struct i2c_registry msm9615_i2c_devices_tca6416[] __initdata = {
+	{
+		I2C_SURF | I2C_FFA | I2C_FLUID,
+		MSM_9615_GSBI5_QUP_I2C_BUS_ID,
+		tca6416_device_info,
+		ARRAY_SIZE(tca6416_device_info),
+	},
+};
+#endif /* CONFIG_GPIO_PCA953X */
+
 #if !defined(CONFIG_SIERRA)
 
 static struct msm_spi_platform_data msm9615_qup_spi_gsbi3_pdata = {
@@ -1562,6 +1587,17 @@ static void __init msm9615_i2c_init(void)
     }
   }
 #endif /* CONFIG_MFD_SWIMCU */
+
+#if defined(CONFIG_GPIO_PCA953X) && defined(CONFIG_SIERRA_AIRLINK_COLUMBIA)
+	for (i = 0; i < ARRAY_SIZE(msm9615_i2c_devices_tca6416); ++i) {
+		if (msm9615_i2c_devices_tca6416[i].machs & mach_mask) {
+			i2c_register_board_info(
+				msm9615_i2c_devices_tca6416[i].bus,
+				msm9615_i2c_devices_tca6416[i].info,
+				msm9615_i2c_devices_tca6416[i].len);
+		}
+	}
+#endif /* CONFIG_GPIO_PCA953X */
 }
 
 static void __init msm9615_reserve(void)

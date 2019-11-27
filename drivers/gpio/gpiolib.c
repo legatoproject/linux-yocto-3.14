@@ -18,7 +18,7 @@
 #include "gpiolib.h"
 
 #ifdef CONFIG_SIERRA_EXT_GPIO
-#include <../base/base.h>
+#include "../base/base.h"
 #include <linux/sierra_gpio.h>
 
 static struct class gpio_class;
