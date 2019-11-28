@@ -1001,7 +1001,23 @@ static struct i2c_registry msm9615_i2c_devices_tca6416[] __initdata = {
 		ARRAY_SIZE(tca6416_device_info),
 	},
 };
-#endif /* CONFIG_GPIO_PCA953X */
+
+static struct i2c_board_info tca6424_device_info[] __initdata = {
+        {
+                I2C_BOARD_INFO("tca6424", 0x22),
+                .platform_data = &msm9615_gpio_expander_info,
+        },
+};
+
+static struct i2c_registry msm9615_i2c_devices_tca6424[] __initdata = {
+        {
+                I2C_SURF | I2C_FFA | I2C_FLUID,
+                MSM_9615_GSBI5_QUP_I2C_BUS_ID,
+                tca6424_device_info,
+                ARRAY_SIZE(tca6424_device_info),
+        },
+};
+#endif /* CONFIG_GPIO_PCA953X && CONFIG_SIERRA_AIRLINK_COLUMBIA */
 
 #if !defined(CONFIG_SIERRA)
 
@@ -1596,6 +1612,15 @@ static void __init msm9615_i2c_init(void)
 				msm9615_i2c_devices_tca6416[i].info,
 				msm9615_i2c_devices_tca6416[i].len);
 		}
+	}
+
+	for (i = 0; i < ARRAY_SIZE(msm9615_i2c_devices_tca6424); ++i) {
+        if (msm9615_i2c_devices_tca6424[i].machs & mach_mask) {
+                i2c_register_board_info(
+                        msm9615_i2c_devices_tca6424[i].bus,
+                        msm9615_i2c_devices_tca6424[i].info,
+                        msm9615_i2c_devices_tca6424[i].len);
+        }
 	}
 #endif /* CONFIG_GPIO_PCA953X */
 }
