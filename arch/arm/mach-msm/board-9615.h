@@ -118,4 +118,9 @@ int gpio_cf3_low_power_reset_toggle(void);
 #define MSM_GPIOEXP_RS485_TERM_N      (220)
 #endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
 
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+#define MSM_GPIO_UART2_RTS_IOT  (64)
+#define MSM_GPIO_UART2_CTS_IOT  (76)
+#endif /* CONFIG_SIERRA_AIRLINK_COLUMBIA */
+
 #endif

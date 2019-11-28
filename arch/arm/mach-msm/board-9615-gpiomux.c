@@ -559,6 +559,39 @@ static struct msm_gpiomux_config msm9615_rs485_in_out_configs[] __initdata = {
 };
 #endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
 
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+static struct gpiomux_setting uart2_rts_iot_default = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_8MA,
+	.pull = GPIOMUX_PULL_NONE,
+	.dir = GPIOMUX_IN,
+};
+
+static struct gpiomux_setting uart2_cts_iot_default = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_8MA,
+	.pull = GPIOMUX_PULL_NONE,
+	.dir = GPIOMUX_OUT_HIGH,
+};
+
+static struct msm_gpiomux_config msm9615_uart2_rts_cts_configs[] __initdata = {
+	{
+		.gpio      = MSM_GPIO_UART2_RTS_IOT,
+		.settings = {
+			[GPIOMUX_ACTIVE] = &uart2_rts_iot_default,
+			[GPIOMUX_SUSPENDED] = &uart2_rts_iot_default,
+		},
+	},
+	{
+		.gpio      = MSM_GPIO_UART2_CTS_IOT,
+		.settings = {
+			[GPIOMUX_ACTIVE] = &uart2_cts_iot_default,
+			[GPIOMUX_SUSPENDED] = &uart2_cts_iot_default,
+		},
+	},
+};
+#endif /* CONFIG_SIERRA_AIRLINK_COLUMBIA */
+
 #ifdef CONFIG_FB_MSM_EBI2
 static struct msm_gpiomux_config msm9615_ebi2_lcdc_configs[] __initdata = {
 	{
@@ -608,6 +641,8 @@ int __init msm9615_init_gpiomux(void)
 #ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
 	msm_gpiomux_install(msm9615_ulpm_configs,
 			ARRAY_SIZE(msm9615_ulpm_configs));
+	msm_gpiomux_install(msm9615_uart2_rts_cts_configs,
+			ARRAY_SIZE(msm9615_uart2_rts_cts_configs));
 #endif /* CONFIG_SIERRA_AIRLINK_COLUMBIA */
 
 #ifdef CONFIG_SIERRA_MSM_HSL_RS485
