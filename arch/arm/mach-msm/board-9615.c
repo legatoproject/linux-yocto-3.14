@@ -45,9 +45,19 @@
 #include <linux/wl12xx.h>
 #include <linux/gpio.h>
 #endif
-#if defined(CONFIG_GPIO_PCA953X) && defined(CONFIG_SIERRA_AIRLINK_COLUMBIA)
+
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+
+#ifdef CONFIG_GPIO_PCA953X
 #include <linux/platform_data/pca953x.h>
-#endif
+#endif /* CONFIG_GPIO_PCA953X */
+
+#ifdef CONFIG_SENSORS_ADS1015
+#include <linux/i2c/ads1015.h>
+#endif /* CONFIG_SENSORS_ADS1015 */
+
+#endif /* CONFIG_SIERRA_AIRLINK_COLUMBIA */
+
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/hardware/gic.h>
@@ -981,7 +991,9 @@ static struct i2c_registry msm9615_i2c_devices_swimcu[] __initdata = {
 };
 #endif /* CONFIG_MFD_SWIMCU */
 
-#if defined(CONFIG_GPIO_PCA953X) && defined(CONFIG_SIERRA_AIRLINK_COLUMBIA)
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+
+#ifdef CONFIG_GPIO_PCA953X
 static struct pca953x_platform_data msm9615_gpio_expander_info = {
 	.gpio_base = 200,
 };
@@ -1017,10 +1029,42 @@ static struct i2c_registry msm9615_i2c_devices_tca6424[] __initdata = {
                 ARRAY_SIZE(tca6424_device_info),
         },
 };
-#endif /* CONFIG_GPIO_PCA953X && CONFIG_SIERRA_AIRLINK_COLUMBIA */
+#endif /* CONFIG_GPIO_PCA953X */
+
+#ifdef CONFIG_SENSORS_ADS1015
+static struct ads1015_platform_data msm9615_ads1015_info = {
+	.channel_data = {
+				{ .enabled = false },
+				{ .enabled = false },
+				{ .enabled = false },
+				{ .enabled = false },
+				{ .enabled = true  },
+				{ .enabled = true  },
+				{ .enabled = true  },
+				{ .enabled = true  },
+			},
+};
+
+static struct i2c_board_info ads1115_device_info[] __initdata = {
+	{
+		I2C_BOARD_INFO("ads1115", 0x48),
+		.platform_data = &msm9615_ads1015_info,
+	},
+};
+
+static struct i2c_registry msm9615_i2c_devices_ads1115[] __initdata = {
+	{
+		I2C_SURF | I2C_FFA | I2C_FLUID,
+		MSM_9615_GSBI5_QUP_I2C_BUS_ID,
+		ads1115_device_info,
+		ARRAY_SIZE(ads1115_device_info),
+	},
+};
+#endif /* CONFIG_SENSORS_ADS1015 */
+
+#endif /* CONFIG_SIERRA_AIRLINK_COLUMBIA */
 
 #if !defined(CONFIG_SIERRA)
-
 static struct msm_spi_platform_data msm9615_qup_spi_gsbi3_pdata = {
 	.max_clock_speed = 24000000,
 };
@@ -1604,7 +1648,9 @@ static void __init msm9615_i2c_init(void)
   }
 #endif /* CONFIG_MFD_SWIMCU */
 
-#if defined(CONFIG_GPIO_PCA953X) && defined(CONFIG_SIERRA_AIRLINK_COLUMBIA)
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+
+#ifdef CONFIG_GPIO_PCA953X
 	for (i = 0; i < ARRAY_SIZE(msm9615_i2c_devices_tca6416); ++i) {
 		if (msm9615_i2c_devices_tca6416[i].machs & mach_mask) {
 			i2c_register_board_info(
@@ -1623,6 +1669,19 @@ static void __init msm9615_i2c_init(void)
         }
 	}
 #endif /* CONFIG_GPIO_PCA953X */
+
+#ifdef CONFIG_SENSORS_ADS1015
+    for (i = 0; i < ARRAY_SIZE(msm9615_i2c_devices_ads1115); ++i) {
+        if (msm9615_i2c_devices_ads1115[i].machs & mach_mask) {
+	    i2c_register_board_info(
+	            msm9615_i2c_devices_ads1115[i].bus,
+		    msm9615_i2c_devices_ads1115[i].info,
+		    msm9615_i2c_devices_ads1115[i].len);
+        }
+    }
+#endif /* CONFIG_SENSORS_ADS1015 */
+
+#endif
 }
 
 static void __init msm9615_reserve(void)
