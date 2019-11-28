@@ -2006,7 +2006,10 @@ static int msm_hs_probe(struct platform_device *pdev)
 
 	uart_func[line] = bsgetuartfun(line);
 
-	if (uart_func[line] == -1) {
+#ifndef CONFIG_SIERRA_AIRLINK_COLUMBIA
+	if (uart_func[line] == -1)
+#endif
+	{
 		uart_func[line] = BSUARTFUNC_DISABLED;
 	}
 

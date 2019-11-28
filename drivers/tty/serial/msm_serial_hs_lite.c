@@ -2484,7 +2484,12 @@ static int msm_serial_hsl_probe(struct platform_device *pdev)
 
 		if ((line == BS_UART1_LINE) &&
 		   (uart_func[line] != BSUARTFUNC_CONSOLE) &&
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+		   (uart_func[line] != BSUARTFUNC_DM) &&
+		   (uart_func[line] != BSUARTFUNC_APP)) {
+#else
 		   (uart_func[line] != BSUARTFUNC_DM)) {
+#endif
 			/* for UART1, the CONSOLE and DM are managed by the HSL driver,
 			* other functionalities are managed by the HS driver */
 			uart_func[line] = BSUARTFUNC_DISABLED;
