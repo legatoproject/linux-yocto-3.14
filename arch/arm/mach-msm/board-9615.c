@@ -1582,10 +1582,20 @@ static struct platform_device *common_devices[] = {
 #endif
 };
 
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+static u8 do_proceed_i2c = 0;
+#endif
+
 static void __init msm9615_i2c_init(void)
 {
 	u8 mach_mask = 0;
 	int i;
+
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+	while(do_proceed_i2c == 0) usleep_range(50, 150);
+	msleep(100);
+#endif
+
 	/* Mask is hardcoded to SURF (CDP).
 	 * works on MTP with same configuration.
 	 */
@@ -1844,6 +1854,9 @@ int gpio_cf3_low_power_reset_toggle(void)
 		ret = 0;
 
 		printk(KERN_INFO "%s: Setting up LowPower_RESET pin toggle timer\n", __func__);
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+		do_proceed_i2c = 0;
+#endif
 
 		/* timer.function, timer.data */
 		setup_timer( &gpio_cf3_low_power_reset_timer,
@@ -1885,6 +1898,9 @@ void gpio_cf3_low_power_reset_timer_callback(unsigned long state)
 
 			/* Do not arm timer, delete it. */
 			delete_timer++;
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+			do_proceed_i2c = 1;
+#endif
 		}
 		break;
 
