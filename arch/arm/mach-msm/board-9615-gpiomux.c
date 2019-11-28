@@ -129,6 +129,15 @@ static struct gpiomux_setting cdc_mclk = {
 };
 #endif /* CONFIG_SIERRA_INTERNAL_CODEC */
 
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+static struct gpiomux_setting ulpm = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_16MA,
+	.pull = GPIOMUX_PULL_UP,
+	.dir = GPIOMUX_OUT_HIGH,
+};
+#endif /* CONFIG_SIERRA_AIRLINK_COLUMBIA */
+
 #ifdef CONFIG_FB_MSM_EBI2
 static struct gpiomux_setting ebi2_lcdc_a_d = {
 	.func = GPIOMUX_FUNC_2,
@@ -162,6 +171,18 @@ static struct gpiomux_setting wlan_suspend_config = {
 	.pull = GPIOMUX_PULL_NONE,
 	.dir = GPIOMUX_IN,
 };
+
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+struct msm_gpiomux_config msm9615_ulpm_configs[] __initdata = {
+        {
+                .gpio      = 54, /* GPIO_23_EXT */
+                .settings = {
+                        [GPIOMUX_SUSPENDED] = &ulpm,
+                        [GPIOMUX_ACTIVE] = &ulpm,
+                },
+        },
+};
+#endif /* CONFIG_SIERRA_AIRLINK_COLUMBIA */
 
 #ifdef CONFIG_SIERRA_INTERNAL_CODEC
 static struct msm_gpiomux_config msm9615_audio_codec_configs[] __initdata = {
@@ -551,6 +572,11 @@ int __init msm9615_init_gpiomux(void)
 	}
 	msm_gpiomux_install(msm9615_gsbi_configs,
 			ARRAY_SIZE(msm9615_gsbi_configs));
+
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+	msm_gpiomux_install(msm9615_ulpm_configs,
+			ARRAY_SIZE(msm9615_ulpm_configs));
+#endif /* CONFIG_SIERRA_AIRLINK_COLUMBIA */
 
 #ifdef CONFIG_SIERRA_INTERNAL_CODEC
 	if(bssupport(BSFEATURE_WM8944) == false)
