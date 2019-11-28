@@ -317,7 +317,11 @@ static struct i2c_driver ads1015_driver = {
 	.id_table = ads1015_id,
 };
 
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+module_late_driver(ads1015_driver, i2c_add_driver, i2c_del_driver);
+#else
 module_i2c_driver(ads1015_driver);
+#endif
 
 MODULE_AUTHOR("Dirk Eibach <eibach@gdsys.de>");
 MODULE_DESCRIPTION("ADS1015 driver");

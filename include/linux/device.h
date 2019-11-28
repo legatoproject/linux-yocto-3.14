@@ -1212,4 +1212,27 @@ static void __exit __driver##_exit(void) \
 } \
 module_exit(__driver##_exit);
 
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+/**
+ * module_late_driver() - Helper macro for drivers that need to be initialized
+ * at the end of machine initialization.
+ *
+ * @__driver: driver name
+ * @__register: register function for this driver type
+ * @__unregister: unregister function for this driver type
+ * @...: Additional arguments to be passed to __register and __unregister.
+ */
+#define module_late_driver(__driver, __register, __unregister, ...) \
+static int __init __driver##_init(void) \
+{ \
+	return __register(&(__driver) , ##__VA_ARGS__); \
+} \
+device_initcall_sync(__driver##_init); \
+static void __exit __driver##_exit(void) \
+{ \
+	__unregister(&(__driver) , ##__VA_ARGS__); \
+} \
+module_exit(__driver##_exit);
+#endif /* CONFIG_SIERRA_AIRLINK_COLUMBIA */
+
 #endif /* _DEVICE_H_ */
