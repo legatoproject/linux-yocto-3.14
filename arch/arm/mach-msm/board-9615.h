@@ -71,6 +71,15 @@ struct i2c_registry {
 #define SWIMCU_ADC_TO_SYS(mcu_adc)      (mcu_adc + SWIMCU_ADC_BASE)
 #define SWIMCU_NR_ADCS                  2
 
+/* DM, FIXME: This should not be here, because we do have GPIO rework */
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+
+/* Macro assumes FX30EXP GPIOs (columbia gpio expander) start at 0 */
+#define FX30EXP_GPIO_BASE               200
+#define FX30EXP_GPIO_TO_SYS(exp_gpio)   (exp_gpio + FX30EXP_GPIO_BASE)
+
+#endif
+
 extern struct pm8xxx_regulator_platform_data
 	msm_pm8018_regulator_pdata[];
 

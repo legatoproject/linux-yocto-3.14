@@ -502,6 +502,16 @@ static int pm_set_mcu_ulpm_enable(struct swimcu *swimcu, int pm)
 		return -EPERM;
 	}
 
+/* DM, FIXME: This required rework, because we have new GPIO framework. */
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+    gpio_request(FX30EXP_GPIO_TO_SYS(14), "FX30_IO_PULLUP_EN1");
+    gpio_direction_input(FX30EXP_GPIO_TO_SYS(14));
+    gpio_free(FX30EXP_GPIO_TO_SYS(14));
+    gpio_request(FX30EXP_GPIO_TO_SYS(10),"FX30_IO_PULLUP_EN2");
+    gpio_direction_input(FX30EXP_GPIO_TO_SYS(10));
+    gpio_free(FX30EXP_GPIO_TO_SYS(10));
+#endif /* CONFIG_SIERRA_AIRLINK_COLUMBIA */
+
 	return 0;
 
 wu_fail:
