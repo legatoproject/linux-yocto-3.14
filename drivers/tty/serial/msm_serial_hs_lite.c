@@ -89,6 +89,13 @@ enum serial_rs_mode {
 	SERIAL_RS485_NO_LOOPBACK, /* RS485 support*/
 	SERIAL_RS485_LOOPBACK, /* RS485 support*/
 };
+
+enum rs485_term_mode {
+	RS485_TERM_DISABLE = 0, /* Disable termination resistor - Default */
+	RS485_TERM_ENABLE,      /* Enable termination resistor */
+	RS485_TERM_DYNAMIC,     /* Dynamic termination resistor - Currently not supported */
+  RS485_TERM_NUM          	/* ALWAYS LAST - Number of items in this enumeration */
+};
 #endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
 
 #ifdef CONFIG_SERIAL_MSM_HSL_CONSOLE
@@ -128,8 +135,8 @@ struct msm_hsl_port {
 	/* Change of "serial_rs_mode" is safe for "non-console"*/
 	/* uart_port and "console" uart_port                   */
 	enum serial_rs_mode uart_rs_mode;
-	/*0 -- Low when RS485 is ON, 1 -- High when RS485 is ON */
-	unsigned int rs485_term_ctrl;
+	/* RS485 termination resistor control */
+	enum rs485_term_mode rs485_term_ctrl;
 	/*In unit of us. Deal with GPIO rising/falling            */
 	/*edge delay introduced from RS485 HW modification on DV2 */
 	unsigned int rs485_tx_ctrl_udelay;
@@ -2182,6 +2189,174 @@ static ssize_t show_uart_config(struct device *dev,
 static DEVICE_ATTR(config, 0444, show_uart_config, NULL);
 #endif /* CONFIG_SIERRA_GSBIn_UART */
 #ifdef CONFIG_SIERRA_MSM_HSL_RS485
+static ssize_t rs485_term_show(struct device *dev,
+                                struct device_attribute *attr, char *buf)
+{
+	struct uart_port *port = NULL;
+	struct msm_hsl_port *the_hsl_port = NULL;
+	struct uart_state *the_state = NULL;
+	struct platform_device *pdev = to_platform_device(dev);
+	enum rs485_term_mode the_rs485_term_ctrl;
+	unsigned long flags;
+	int ret;
+
+	the_hsl_port = (struct msm_hsl_port *)(dev_get_drvdata(dev));
+	port = (struct uart_port *)the_hsl_port;
+	if (!the_hsl_port)
+	{
+		printk(KERN_ALERT "msm_hsl_port is not initialized correctly\n");
+		BUG();
+		return sprintf(buf, "\n");
+	}
+
+	the_state = port->state;
+
+	mutex_lock(&(the_state->port.mutex));
+	if (!the_state->port.tty)
+	{
+		mutex_unlock(&(the_state->port.mutex));
+		printk(KERN_ALERT "This TTY device has been shutdown, do nothing\n");
+		return sprintf(buf, "\n");
+	}
+
+	ldsem_down_read(&(the_state->port.tty->ldisc_sem), MAX_SCHEDULE_TIMEOUT);
+
+	/* In the scenario of being console, we need to grab "uart_port.lock" */
+	spin_lock_irqsave(&port->lock, flags);
+
+	the_rs485_term_ctrl = the_hsl_port->rs485_term_ctrl;
+
+	spin_unlock_irqrestore(&port->lock, flags);
+
+	ldsem_up_read(&(the_state->port.tty->ldisc_sem));
+	mutex_unlock(&(the_state->port.mutex));
+
+	printk(KERN_ALERT "uart port(%d) rs485 term ctrl(%d)\n", port->line, the_rs485_term_ctrl);
+
+	switch (the_rs485_term_ctrl)
+	{
+	case RS485_TERM_DISABLE:
+		ret = sprintf(buf, "DISABLED\n");
+		break;
+	case RS485_TERM_ENABLE:
+		ret = sprintf(buf, "ENABLED\n");
+		break;
+	case RS485_TERM_DYNAMIC:
+		ret = sprintf(buf, "DYNAMIC\n");
+		break;
+	default:
+		ret = sprintf(buf, "INVALID\n");
+		break;
+	}
+	return ret;
+}
+
+static ssize_t rs485_term_store(struct device *dev,
+                                struct device_attribute *attr,
+                                const char *buf, size_t count)
+{
+	unsigned int val;
+	struct uart_port *port = NULL;
+	struct msm_hsl_port *the_hsl_port = NULL;
+	struct uart_state *the_state = NULL;
+	struct platform_device *pdev = to_platform_device(dev);
+	unsigned int the_rs_mode;
+	enum rs485_term_mode new_rs485_term_ctrl;
+	unsigned long flags;
+
+	the_hsl_port = (struct msm_hsl_port *)(dev_get_drvdata(dev));
+	port = (struct uart_port *)the_hsl_port;
+	if (!port)
+	{
+		printk(KERN_ALERT "msm_hsl_port is not initialized correctly\n");
+		BUG();
+		return count;
+	}
+
+	// Do not allow the termination resistor mode to be changed in RS232 mode
+	the_rs_mode = the_hsl_port->uart_rs_mode;
+	if (the_rs_mode == 0)
+	{
+		printk(KERN_ALERT "RS485 termination mode is invalid for RS232\n");
+		return count;
+	}
+
+	val = simple_strtoul(buf, NULL, 0);
+	if (val < RS485_TERM_NUM)
+		new_rs485_term_ctrl = (enum rs485_term_mode) val;
+	else
+	{
+		printk(KERN_ALERT "input mode is invalid(%d), should be of <0, 1, 2>\n");
+		return count;
+	}
+
+	the_state = port->state;
+	mutex_lock(&(the_state->port.mutex));
+	if (!the_state->port.tty)
+	{
+		mutex_unlock(&(the_state->port.mutex));
+		printk(KERN_ALERT "This TTY device has been shutdown, do nothing\n");
+		return count;
+	}
+
+	ldsem_down_write(&(the_state->port.tty->ldisc_sem), MAX_SCHEDULE_TIMEOUT);
+
+	if (the_hsl_port->rs485_term_ctrl != new_rs485_term_ctrl)
+	{
+		switch (new_rs485_term_ctrl)
+		{
+		case RS485_TERM_DISABLE:
+			/* Control RS485_TERM_N */
+			gpio_set_value_cansleep(MSM_GPIOEXP_RS485_TERM_N, 1);
+			dsb();
+
+			spin_lock_irqsave(&port->lock, flags);
+
+			the_hsl_port->rs485_term_ctrl = new_rs485_term_ctrl;
+			dsb();
+
+			spin_unlock_irqrestore(&port->lock, flags);
+
+			break;
+
+		case RS485_TERM_ENABLE:
+			/* Control RS485_TERM_N */
+			gpio_set_value_cansleep(MSM_GPIOEXP_RS485_TERM_N, 0);
+			dsb();
+
+			spin_lock_irqsave(&port->lock, flags);
+
+			the_hsl_port->rs485_term_ctrl = new_rs485_term_ctrl;
+			dsb();
+
+			spin_unlock_irqrestore(&port->lock, flags);
+
+			break;
+
+		case RS485_TERM_DYNAMIC:
+			/* Do nothing other than store the value for now, not supported */
+			printk(KERN_ALERT "RS485 dynamic termination resistor, currently not supported\n");
+
+			spin_lock_irqsave(&port->lock, flags);
+
+			the_hsl_port->rs485_term_ctrl = new_rs485_term_ctrl;
+			dsb();
+
+			spin_unlock_irqrestore(&port->lock, flags);
+
+			break;
+
+		default:
+			BUG(); //Weird, should not run to here
+		}
+	}
+
+	ldsem_up_write(&(the_state->port.tty->ldisc_sem));
+	mutex_unlock(&(the_state->port.mutex));
+	return count;
+}
+static DEVICE_ATTR(rs485_term, S_IWUSR | S_IRUGO, rs485_term_show, rs485_term_store);
+
 static ssize_t rs_mode_show(struct device *dev,
                                 struct device_attribute *attr, char *buf)
 {
@@ -2301,9 +2476,7 @@ static ssize_t rs_mode_store(struct device *dev,
 			spin_unlock_irqrestore(&port->lock, flags);
 
 			/* Forceoff RS232 */
-			gpio_set_value_cansleep(MSM_GPIOEXP_FORCEOFF_RS232_N, 0);
-			/* Control RS485_TERM_N */
-			gpio_set_value_cansleep(MSM_GPIOEXP_RS485_TERM_N, (the_hsl_port->rs485_term_ctrl ? 0 : 0));
+			gpio_set_value_cansleep(MSM_GPIOEXP_FORCEOFF_RS232_N, 0);			
 			dsb();
 
 			spin_lock_irqsave(&port->lock, flags);
@@ -2342,6 +2515,8 @@ static ssize_t rs_mode_store(struct device *dev,
 
 			/* Turn on RS232 */
 			gpio_set_value_cansleep(MSM_GPIOEXP_FORCEOFF_RS232_N, 1);
+			/* Disable RS485 termination resistor */
+			gpio_set_value_cansleep(MSM_GPIOEXP_RS485_TERM_N, 1);
 			dsb();
 
 			spin_lock_irqsave(&port->lock, flags);
@@ -2352,6 +2527,7 @@ static ssize_t rs_mode_store(struct device *dev,
 			msm_hsl_reset_txrx(port);
 
 			the_hsl_port->uart_rs_mode = SERIAL_RS232;
+			the_hsl_port->rs485_term_ctrl = RS485_TERM_DISABLE;
 			dsb();
 
 			spin_unlock_irqrestore(&port->lock, flags);
@@ -2642,13 +2818,17 @@ static int msm_serial_hsl_probe(struct platform_device *pdev)
 	if (uart_func[line] != BSUARTFUNC_DISABLED)
 	{
 		msm_hsl_port->uart_rs_mode = SERIAL_RS232;
-		msm_hsl_port->rs485_term_ctrl = 0x0;
+		msm_hsl_port->rs485_term_ctrl = RS485_TERM_DISABLE;
 		msm_hsl_port->rs485_tx_ctrl_udelay = 20; //Measured data on DV2 board
 		msm_hsl_port->rs485_rx_ctrl_udelay = 200; //Measured data on DV2 board
 
 		ret = device_create_file(&pdev->dev, &dev_attr_rs_mode);
 		if (unlikely(ret))
 			pr_err("Doesn't support Serial RS485 mode\n");
+
+		ret = device_create_file(&pdev->dev, &dev_attr_rs485_term);
+		if (unlikely(ret))
+			pr_err("Doesn't support Serial RS485 termination\n");
 	}
 #endif /* CONFIG_SIERRA_MSM_HSL_RS485 */
 
@@ -2836,7 +3016,7 @@ static int __init msm_hsl_rs485_gpioexp_init(void)
 	int ret = 0x0;
 
 	ret = gpio_request_one(MSM_GPIOEXP_FORCEOFF_RS232_N, GPIOF_OUT_INIT_HIGH, "gpio_FORCEOFF_RS232_N");
-	ret = gpio_request_one(MSM_GPIOEXP_RS485_TERM_N, GPIOF_OUT_INIT_LOW, "gpio_RS485_TERM_N");
+	ret = gpio_request_one(MSM_GPIOEXP_RS485_TERM_N, GPIOF_OUT_INIT_HIGH, "gpio_RS485_TERM_N");
 
 	return ret;
 }
