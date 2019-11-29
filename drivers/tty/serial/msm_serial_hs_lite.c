@@ -2662,6 +2662,7 @@ static int msm_serial_hsl_probe(struct platform_device *pdev)
 		   (uart_func[line] != BSUARTFUNC_CONSOLE) &&
 #ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
 		   (uart_func[line] != BSUARTFUNC_DM) &&
+		   (uart_func[line] != BSUARTFUNC_RS485) &&
 		   (uart_func[line] != BSUARTFUNC_APP)) {
 #else
 		   (uart_func[line] != BSUARTFUNC_DM)) {
@@ -2689,6 +2690,12 @@ static int msm_serial_hsl_probe(struct platform_device *pdev)
 		pr_info("ttyHSL%d could be used as generic serial port.\n", line);
 		uart_func_str_pt[line] = (char *)app_func_string;
 		break;
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+	case BSUARTFUNC_RS485:
+		pr_info("ttyHSL%d could be used as RS485 serial port.\n", line);
+		uart_func_str_pt[line] = (char *)app_func_string;
+		break;
+#endif
 	case BSUARTFUNC_CONSOLE:
 		pr_info("ttyHSL%d is reserved for CONSOLE service.\n", line);
 		uart_func_str_pt[line] = (char *)cons_func_string;
@@ -2817,10 +2824,18 @@ static int msm_serial_hsl_probe(struct platform_device *pdev)
 #ifdef CONFIG_SIERRA_MSM_HSL_RS485
 	if (uart_func[line] != BSUARTFUNC_DISABLED)
 	{
-		msm_hsl_port->uart_rs_mode = SERIAL_RS232;
+		if (uart_func[line] == BSUARTFUNC_RS485)
+		{
+			/* currently supported SERIAL_RS485_NO_LOOPBACK */
+			msm_hsl_port->uart_rs_mode = SERIAL_RS485_NO_LOOPBACK;
+		}
+		else
+		{
+			msm_hsl_port->uart_rs_mode = SERIAL_RS232;
+		}
 		msm_hsl_port->rs485_term_ctrl = RS485_TERM_DISABLE;
-		msm_hsl_port->rs485_tx_ctrl_udelay = 20; //Measured data on DV2 board
-		msm_hsl_port->rs485_rx_ctrl_udelay = 200; //Measured data on DV2 board
+		msm_hsl_port->rs485_tx_ctrl_udelay = 20; /* Measured data on DV2 board */
+		msm_hsl_port->rs485_rx_ctrl_udelay = 200; /* Measured data on DV2 board */
 
 		ret = device_create_file(&pdev->dev, &dev_attr_rs_mode);
 		if (unlikely(ret))

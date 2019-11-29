@@ -2006,7 +2006,9 @@ static int msm_hs_probe(struct platform_device *pdev)
 
 	uart_func[line] = bsgetuartfun(line);
 
-#ifndef CONFIG_SIERRA_AIRLINK_COLUMBIA
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+	if ((uart_func[line] == -1) || (uart_func[line] != BSUARTFUNC_RS232_FC))
+#else
 	if (uart_func[line] == -1)
 #endif
 	{
@@ -2018,6 +2020,12 @@ static int msm_hs_probe(struct platform_device *pdev)
 		pr_info("ttyHS%d could be used as generic serial port.\n", line);
 		uart_func_str_pt[line] = (char *)app_func_string;
 		break;
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+	case BSUARTFUNC_RS232_FC:
+		pr_info("ttyHS%d could be used as RS232 with Flow Control serial port.\n", line);
+		uart_func_str_pt[line] = (char *)app_func_string;
+		break;
+#endif /* CONFIG_SIERRA_AIRLINK_COLUMBIA */
 	default:
 		pr_info("ttyHS%d, function %d is not valid on application processor.\n",
 			line, uart_func[line]);

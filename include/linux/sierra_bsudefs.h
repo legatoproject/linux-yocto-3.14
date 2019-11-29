@@ -205,9 +205,11 @@ enum bsfeature
  * Purpose:  Enumerated list of different functions supported by App processor
  *
  * Members:  BSUARTFUNC_DISABLED  - UART disabled
- *           BSUARTFUNC_DM - UART reserved for DM service
- *           BSUARTFUNC_CONSOLE - UART reserved for CONSOLE service
- *           BSUARTFUNC_APP - UART open for all application usage
+ *           BSUARTFUNC_DM        - UART reserved for DM service
+ *           BSUARTFUNC_RS485     - UART used for Linux application using RS485
+ *           BSUARTFUNC_RS232_FC  - UART used for Linux application using RS232 with Hardware flow control
+ *           BSUARTFUNC_CONSOLE   - UART reserved for CONSOLE service
+ *           BSUARTFUNC_APP       - UART open for all application usage
  *
  * Notes:    None
  *
@@ -216,6 +218,10 @@ enum bsuartfunc
 {
   BSUARTFUNC_DISABLED = 0,
   BSUARTFUNC_DM       = 2,
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+  BSUARTFUNC_RS485    = 14,
+  BSUARTFUNC_RS232_FC = 15,
+#endif
   BSUARTFUNC_CONSOLE  = 16,
   BSUARTFUNC_APP      = 17,
 };
