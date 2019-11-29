@@ -1239,8 +1239,13 @@ retry:
 
 			timeo = MAX_SCHEDULE_TIMEOUT;
 			ret = netlink_attachskb(sock, nc, &timeo, NULL);
-			if (ret == 1)
+			if (ret == 1) {
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+				sock = NULL;
+#endif
 				goto retry;
+			}
+
 			if (ret) {
 				sock = NULL;
 				nc = NULL;
