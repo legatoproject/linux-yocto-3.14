@@ -1876,6 +1876,12 @@ int gpio_cf3_low_power_reset_toggle(void)
 			ret = -EPERM;
 		}
 	}
+#ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+	else
+	{
+		do_proceed_i2c = 0;
+	}
+#endif
 
 	return ret;
 }
