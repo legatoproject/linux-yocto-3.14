@@ -6,7 +6,7 @@
  *
  * Purpose:   Name gpio and convert to pin num and function
  *
- * Copyright: (c) 2016 Sierra Wireless, Inc.
+ * Copyright: (c) 2016-2019 Sierra Wireless, Inc.
  *            All rights reserved
  *
  ************/
@@ -32,11 +32,20 @@
 DEFINE_SPINLOCK(alias_lock);
 DEFINE_SPINLOCK(gpiochip_lock);
 
-static struct kset *gpio_v2_kset;		/* /sys/class/gpio/v2/ */
-static struct kset *gpiochip1_kset;		/* /sys/class/gpio/gpiochip1/ */
-static struct kset *gpio_aliases_kset;		/* /sys/class/gpio/v2/aliases/ */
-static struct kset *gpio_aliases_exported_kset;	/* /sys/class/gpio/v2/aliases_exported/ */
-static struct class *gpio_class;		/* parent directory of /sys/class/gpio/v2/ */
+/* /sys/class/gpio/v2/ */
+static struct kset *gpio_v2_kset;
+
+/* /sys/class/gpio/gpiochip1/ */
+static struct kset *gpiochip1_kset;
+
+/* /sys/class/gpio/v2/aliases/ */
+static struct kset *gpio_aliases_kset;
+
+/* /sys/class/gpio/v2/aliases_exported/ */
+static struct kset *gpio_aliases_exported_kset;
+
+/* parent directory of /sys/class/gpio/v2/ */
+static struct class *gpio_class;
 
 static LIST_HEAD(gpiochip_list);
 struct gpiochip_list {
@@ -45,21 +54,29 @@ struct gpiochip_list {
 	struct device		*dev;
 };
 
-#define DRIVER_NAME		"sierra_gpio"
-#define DT_COMPATIBLE		"sierra,gpio"
-#define GPIO_ALIAS_PROPERTY	"alias-"
+#define DRIVER_NAME         "sierra_gpio"
+#define DT_COMPATIBLE       "sierra,gpio"
+#define GPIO_ALIAS_PROPERTY "alias-"
 
-#define MAX_NB_GPIOS	100
+/* Number of maximum entries for all aliases. This includes duplicates as well.
+   For example, we may have multiple names for single GPIO pin, and all these
+   names are counted. If number of GPIOs is 50, and we have on average 3
+   aliases for same GPIO (more or less the case for FX30), 150+ number would
+   be a good start. */
+#define MAX_NB_GPIOS (300)
 
 struct gpio_alias_map {
-	struct device_attribute	attr;		// attribute for the alias populated to /sys/class/gpio/aliases/
-	char			*gpio_name;	// alias name
-	int			gpio_num;	// gpio number
+    /* attribute for the alias populated to /sys/class/gpio/aliases/ */
+	struct device_attribute	attr;
+    /* alias name */
+	char *gpio_name;
+    /* gpio number */
+	int gpio_num;
 };
 
-static u32			gpio_alias_count = 0;
-static u32			gpio_alias_dt_count = 0;
-static struct gpio_alias_map	gpio_alias_map[MAX_NB_GPIOS];
+static u32 gpio_alias_count = 0;
+static u32 gpio_alias_dt_count = 0;
+static struct gpio_alias_map gpio_alias_map[MAX_NB_GPIOS];
 
 /* for RI PIN owner flag*/
 #define RI_OWNER_MODEM      0
@@ -222,11 +239,11 @@ EXPORT_SYMBOL(gpio_create_alias_link);
 
 void gpio_remove_alias_link(const struct gpio_desc *desc)
 {
-	int		index = 0;
-	const char	*ioname;
+	int index = 0;
+	const char *ioname;
 
 	if (desc) {
-		char	gpioname[16]; /* "gpioNNNN\0" */
+		char gpioname[16]; /* "gpioNNNN\0" */
 
 		snprintf(gpioname, sizeof(gpioname), "gpio%d", desc_to_gpio(desc));
 		sysfs_remove_link(&gpio_v2_kset->kobj, gpioname);
@@ -309,7 +326,7 @@ done:
 		pr_debug("%s: status %d\n", __func__, status);
 	return status < 0 ? status : len;
 }
-static /* const */ DEVICE_ATTR(export, 0200, NULL, export_store);
+static DEVICE_ATTR(export, 0200, NULL, export_store);
 
 static ssize_t unexport_store(struct device *dev, struct device_attribute *attr,
 				const char *buf, size_t len)
@@ -401,7 +418,7 @@ done:
 		pr_debug("%s: status %d\n", __func__, status);
 	return status < 0 ? status : len;
 }
-static /* const */ DEVICE_ATTR(alias_export, 0200, NULL, alias_export_store);
+static DEVICE_ATTR(alias_export, 0200, NULL, alias_export_store);
 
 static ssize_t alias_unexport_store(struct device *dev, struct device_attribute *attr,
 					const char *buf, size_t len)
@@ -447,7 +464,7 @@ done:
 		pr_debug("%s: status %d\n", __func__, status);
 	return status < 0 ? status : len;
 }
-static /* const */ DEVICE_ATTR(alias_unexport, 0200, NULL, alias_unexport_store);
+static DEVICE_ATTR(alias_unexport, 0200, NULL, alias_unexport_store);
 
 /*
  * /sys/class/gpio/alias_define ... write-only: name:<num> or name:<base>,<offset>
@@ -503,7 +520,7 @@ done_free:
 	kfree(ioname);
 	return status < 0 ? status : len;
 }
-static /* const */ DEVICE_ATTR(alias_define, 0200, NULL, alias_map_define);
+static DEVICE_ATTR(alias_define, 0200, NULL, alias_map_define);
 
 static ssize_t alias_map_undefine(struct device *dev, struct device_attribute *attr,
 					const char *buf, size_t len)
@@ -520,7 +537,7 @@ static ssize_t alias_map_undefine(struct device *dev, struct device_attribute *a
 	kfree(ioname);
 	return status < 0 ? status : len;
 }
-static /* const */ DEVICE_ATTR(alias_undefine, 0200, NULL, alias_map_undefine);
+static DEVICE_ATTR(alias_undefine, 0200, NULL, alias_map_undefine);
 
 /**
  * gpio_show_map() - Display the GPIO aliases/pin/owned_by_app_proc map
@@ -554,7 +571,7 @@ static ssize_t alias_map_show(struct device *dev, struct device_attribute *attr,
 	}
 	return status;
 }
-static /* const */ DEVICE_ATTR(alias_map, 0444, alias_map_show, NULL);
+static DEVICE_ATTR(alias_map, 0444, alias_map_show, NULL);
 
 /**
  * gpiochip1_show_mask() - Display the GPIO chip 1 mask
@@ -569,7 +586,7 @@ static ssize_t gpiochip1_show_mask(struct device *dev, struct device_attribute *
 
 	return sprintf(buf, "0x%08x%08x\n", (u32)(chip->mask[0] >> 32), (u32)chip->mask[0]);
 }
-static /* const */ DEVICE_ATTR(mask, 0444, gpiochip1_show_mask, NULL);
+static DEVICE_ATTR(mask, 0444, gpiochip1_show_mask, NULL);
 
 /**
  * gpiochip1_show_mask_v2() - Display the GPIO chip 1 mask
@@ -592,7 +609,7 @@ static ssize_t gpiochip1_show_mask_v2(struct device *dev, struct device_attribut
 	}
 	return len + sprintf(buf + len, "\n");
 }
-static /* const */ DEVICE_ATTR(mask_v2, 0444, gpiochip1_show_mask_v2, NULL);
+static DEVICE_ATTR(mask_v2, 0444, gpiochip1_show_mask_v2, NULL);
 
 static void gpiochip_export_v2(struct gpiochip_list *chip)
 {
@@ -646,7 +663,7 @@ int gpiochip_add_export_v2(struct device *dev, struct gpio_chip *chip)
 
 static void gpiochip_unexport_v2(struct gpiochip_list *chip)
 {
-	char	gpiochipname[16]; //"gpiochipNNNN\0"
+	char	gpiochipname[16]; /* "gpiochipNNNN\0" */
 
 	snprintf(gpiochipname, sizeof(gpiochipname), "gpiochip%u", chip->chip->base);
 	pr_info("%s: Unxport gpiochip %s [%u,%u] to v2\n",
@@ -865,7 +882,8 @@ static int sierra_gpio_probe(struct platform_device *pdev)
 }
 
 /**
- * Returns 0 on success to indicate that gpio was populated with a pointer to a gpio descriptor
+ * Returns 0 on success to indicate that gpio was populated with
+ * a pointer to a gpio descriptor
  */
 int gpio_alias_lookup(const char *alias, struct gpio_desc **gpio)
 {

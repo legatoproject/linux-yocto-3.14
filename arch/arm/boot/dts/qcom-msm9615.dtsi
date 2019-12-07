@@ -140,6 +140,7 @@
                        <107 40>,
 #endif /* CONFIG_GPIO_SWIMCU */
 #ifdef CONFIG_SIERRA_AIRLINK_COLUMBIA
+                       <73 24>,
                        <200 42>,
                        <201 43>,
                        <202 44>,

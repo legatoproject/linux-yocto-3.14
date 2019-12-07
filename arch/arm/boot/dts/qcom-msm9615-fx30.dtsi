@@ -12,28 +12,193 @@
  *
  */
 &sierra_gpio {
-     alias-43 = <200 0>;
-     alias-44 = <201 0>;
-     alias-45 = <202 0>;
-     alias-46 = <203 0>;
-     alias-47 = <204 0>;
-     alias-48 = <205 0>;
-     alias-49 = <206 0>;
-     alias-50 = <207 0>;
-     alias-51 = <208 0>;
-     alias-52 = <209 0>;
-     alias-53 = <210 0>;
-     alias-54 = <211 0>;
-     alias-55 = <212 0>;
-     alias-56 = <213 0>;
-     alias-57 = <214 0>;
-     alias-58 = <215 0>;
-     alias-59 = <216 0>;
-     alias-60 = <217 0>;
-     alias-61 = <218 0>;
-     alias-62 = <219 0>;
-     alias-63 = <220 0>;
-     alias-64 = <221 0>;
-     alias-65 = <222 0>;
-     alias-66 = <223 0>;
+    /* These will show up as gpioNN */
+    alias-25 = <73 0>;
+    alias-43 = <200 0>;
+    alias-44 = <201 0>;
+    alias-45 = <202 0>;
+    alias-46 = <203 0>;
+    alias-47 = <204 0>;
+    alias-48 = <205 0>;
+    alias-49 = <206 0>;
+    alias-50 = <207 0>;
+    alias-51 = <208 0>;
+    alias-52 = <209 0>;
+    alias-53 = <210 0>;
+    alias-54 = <211 0>;
+    alias-55 = <212 0>;
+    alias-56 = <213 0>;
+    alias-57 = <214 0>;
+    alias-58 = <215 0>;
+    alias-59 = <216 0>;
+    alias-60 = <217 0>;
+    alias-61 = <218 0>;
+    alias-62 = <219 0>;
+    alias-63 = <220 0>;
+    alias-64 = <221 0>;
+    alias-65 = <222 0>;
+    alias-66 = <223 0>;
+
+    /*
+     * Now, more descriptive names for the same thing.
+    */
+
+
+    /*
+     * FX30 GPIOs
+     */
+
+    /* GPIO2 */
+    alias-FX30-DIGITAL_INPUT1_N = <59 0>;
+    /* GPIO6 */
+    alias-FX30_RESET_OUT_N = <66 0>;
+    /* GPIO7 */
+    alias-FX30-PB_INPUT = <79 0>;
+    /* GPIO8 */
+    alias-FX30_IOT_GPIO4 = <29 0>;
+    /* GPIO13 */
+    alias-FX30_IOT_GPIO3 = <84 0>;
+    /* GPIO21 */
+    alias-FX30-DIGITAL_INPUT2_N = <50 0>;
+    /* GPIO22 */
+    alias-FX30-DIGITAL_INPUT3_N = <49 0>;
+    /* GPIO23 */
+    alias-FX30-PWR_EN_23 = <54 0>;
+    /* GPIO24 */
+    alias-FX30-ON_MON_N = <61 0>;
+    /* GPIO25 */
+    alias-FX30-IOT_DETECT = <73 0>;
+    /* GPIO29 */
+    alias-FX30-GPIO29 = <25 0>;
+    /* GPIO32 */
+    alias-FX30-HUB_ENABLE = <30 0>;
+    /* GPIO33 */
+    alias-FX30-IOT_GPIO2 = <78 0>;
+
+#ifdef CONFIG_GPIO_SWIMCU
+        /* GPIO36 */
+        alias-FX30-ULPM_WAKE1_36 = <102 0>;
+        /* GPIO38 */
+        alias-FX30-ULPM_WAKE1_38 = <104 0>;
+#endif /* CONFIG_GPIO_SWIMCU */
+
+     /* GPIO 43 */
+     alias-FX30-NETWORK_LED_RED = <200 0>;
+     /* GPIO44 */
+     alias-FX30-NETWORK_LED_GRN = <201 0>;
+     /* GPIO45 */
+     alias-FX30-SIGNAL_LED_RED = <202 0>;
+     /* GPIO46 */
+     alias-FX30-SIGNAL_LED_GRN = <203 0>;
+     /* GPIO47 */
+     alias-FX30-USER_LED_RED = <204 0>;
+     /* GPIO48 */
+     alias-FX30-USER_LED_GRN = <205 0>;
+     /* GPIO49 */
+     alias-FX30-POWER_LED_RED_N = <206 0>;
+     /* GPIO50 */
+     alias-FX30-POWER_LED_GRN = <207 0>;
+     /* GPIO51 */
+     alias-FX30-POWER_LED_MUX = <208 0>;
+     /* GPIO52 */
+     alias-FX30-GPS_BIAS_EN = <209 0>;
+     /* GPIO53 */
+     alias-FX30-IO_PULLUP_EN2 = <210 0>;
+     /* GPIO54 */
+     alias-FX30-IO_PULLUP_EN3 = <211 0>;
+     /* GPIO55 */
+     alias-FX30-ETH_DISABLE_N = <212 0>;
+     /* GPIO56 */
+     alias-FX30-DIGITAL_OUTPUT3 = <213 0>;
+     /* GPIO57 */
+     alias-FX30-IO_PULLUP_EN1 = <214 0>;
+     /* GPIO58 */
+     alias-FX30-POWER_HOLD = <215 0>;
+
+    /*
+     * FX30 GPIOs
+     */
+
+    /* GPIO2 */
+    alias-FX30S-DIGITAL_INPUT1_N = <59 0>;
+    /* GPIO6 */
+    alias-FX30S_RESET_OUT_N = <66 0>;
+    /* GPIO7 */
+    alias-FX30S-PB_INPUT = <79 0>;
+    /* GPIO8 */
+    alias-FX30S_IOT_GPIO4 = <29 0>;
+    /* GPIO13 */
+    alias-FX30S_IOT_GPIO3 = <84 0>;
+    /* GPIO21 */
+    alias-FX30S-DIGITAL_INPUT2_N = <50 0>;
+    /* GPIO22 */
+    alias-FX30S-DIGITAL_INPUT3_N = <49 0>;
+    /* GPIO23 */
+    alias-FX30S-PWR_EN_23 = <54 0>;
+    /* GPIO24 */
+    alias-FX30S-ON_MON_N = <61 0>;
+    /* GPIO25 */
+    alias-FX30S-IOT_DETECT = <73 0>;
+    /* GPIO29 */
+    alias-FX30S-GPIO29 = <25 0>;
+    /* GPIO32 */
+    alias-FX30S-HUB_ENABLE = <30 0>;
+    /* GPIO33 */
+    alias-FX30S-IOT_GPIO2 = <78 0>;
+
+#ifdef CONFIG_GPIO_SWIMCU
+        /* GPIO36 */
+        alias-FX30S-ULPM_WAKE1_36 = <102 0>;
+        /* GPIO38 */
+        alias-FX30S-ULPM_WAKE1_38 = <104 0>;
+#endif /* CONFIG_GPIO_SWIMCU */
+
+     /* GPIO 43 */
+     alias-FX30S-NETWORK_LED_RED = <200 0>;
+     /* GPIO44 */
+     alias-FX30S-NETWORK_LED_GRN = <201 0>;
+     /* GPIO45 */
+     alias-FX30S-SIGNAL_LED_RED = <202 0>;
+     /* GPIO46 */
+     alias-FX30S-SIGNAL_LED_GRN = <203 0>;
+     /* GPIO47 */
+     alias-FX30S-USER_LED_RED = <204 0>;
+     /* GPIO48 */
+     alias-FX30S-USER_LED_GRN = <205 0>;
+     /* GPIO49 */
+     alias-FX30S-POWER_LED_RED_N = <206 0>;
+     /* GPIO50 */
+     alias-FX30S-POWER_LED_GRN = <207 0>;
+     /* GPIO51 */
+     alias-FX30S-POWER_LED_MUX = <208 0>;
+     /* GPIO52 */
+     alias-FX30S-GPS_BIAS_EN = <209 0>;
+     /* GPIO53 */
+     alias-FX30S-IO_PULLUP_EN2 = <210 0>;
+     /* GPIO54 */
+     alias-FX30S-IO_PULLUP_EN3 = <211 0>;
+     /* GPIO55 */
+     alias-FX30S-ETH_DISABLE_N = <212 0>;
+     /* GPIO56 */
+     alias-FX30S-DIGITAL_OUTPUT3 = <213 0>;
+     /* GPIO57 */
+     alias-FX30S-IO_PULLUP_EN1 = <214 0>;
+     /* GPIO58 */
+     alias-FX30S-POWER_HOLD = <215 0>;
+     /* GPIO59: Handled in RS485 driver */
+     /* alias-FX30S-FORCEOFF_RS232_N = <216 0>; */
+     /* GPIO60 */
+     alias-FX30S-RS485_OUT_EN = <217 0>;
+     /* GPIO61 */
+     alias-FX30S-RS485_IN_EN_N = <218 0>;
+     /* GPI62 */
+     alias-FX30S-RS485_POL_N = <219 0>;
+     /* GPIO63: Handled in RS485 driver */
+     /* alias-FX30S-RS485_TERM_N = <220 0>; */
+     /* GPIO64 */
+     alias-FX30S-GPIO64 = <221 0>;
+     /* GPIO65 */
+     alias-FX30S-GPIO65 = <222 0>;
+     /* GPIO66 */
+     alias-FX30S-GPIO66 = <223 0>;
 };
