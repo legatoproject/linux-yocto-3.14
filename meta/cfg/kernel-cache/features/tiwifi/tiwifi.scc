@@ -1,4 +1,0 @@
-define KFEATURE_DESCRIPTION "TI wl18XX wireless"
-define KFEATURE_COMPATIBILITY all
-
-kconf hardware tiwifi.cfg
