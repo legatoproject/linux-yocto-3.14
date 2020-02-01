@@ -320,6 +320,8 @@ static ssize_t export_store(struct device *dev, struct device_attribute *attr,
 	status = gpio_export(gpio, true);
 	if (status < 0)
 		gpio_free(gpio);
+	else
+		set_bit(FLAG_SYSFS, &desc->flags);
 
 done:
 	if (status)
@@ -412,6 +414,8 @@ static ssize_t alias_export_store(struct device *dev, struct device_attribute *a
 	status = gpio_export(gpio, true);
 	if (status < 0)
 		gpio_free(gpio);
+	else
+		set_bit(FLAG_SYSFS, &desc->flags);
 
 done:
 	if (status)

@@ -769,7 +769,7 @@ static ssize_t export_store(struct class *class,
 	struct gpio_desc	*desc;
 	int			status;
 
-#ifdef CONFIG_SIERRA_EXT_GPIO	
+#ifdef CONFIG_SIERRA_EXT_GPIO
 	status = gpio_map_name_to_num(buf, len, false, &gpio);
 #else
 	status = kstrtol(buf, 0, &gpio);
@@ -812,12 +812,13 @@ static ssize_t unexport_store(struct class *class,
 	long			gpio;
 	struct gpio_desc	*desc;
 	int			status;
-#ifdef CONFIG_SIERRA_EXT_GPIO	
+#ifdef CONFIG_SIERRA_EXT_GPIO
 	const char		*ioname;
 	char			ioname_buf[128];
 	int			index;
 
-	status = gpio = gpio_map_name_to_num(buf, len, false, &gpio);
+	status = gpio_map_name_to_num(buf, len, false, &gpio);
+
 #else
 	status = kstrtol(buf, 0, &gpio);
 #endif /*CONFIG_SIERRA_EXT_GPIO*/
